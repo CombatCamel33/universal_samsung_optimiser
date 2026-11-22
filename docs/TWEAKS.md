@@ -59,7 +59,7 @@ Safe for anyone. Telemetry, diagnostics, factory test tools, AR toys and preload
 | `com.android.cts.ctsshim` | AOSP | CTS test shim, only used by certification test suites |
 | `com.android.cts.priv.ctsshim` | AOSP | Privileged CTS test shim, only used by certification test suites |
 
-## Tier 2 - balanced (111 packages total)
+## Tier 2 - balanced (110 packages total)
 
 Adds features that most people never open: Bixby, Samsung context/customisation
 services, Edge panels, Modes & Routines, Digital Wellbeing, gaming services,
@@ -106,7 +106,6 @@ ARCore, Link-to-Windows and the Samsung TTS language packs (which are large).
 | `com.samsung.android.aware.service` | Samsung | Nearby-device awareness service for SmartThings |
 | `com.samsung.android.easysetup` | Samsung | Easy Setup / Quick Share handshake service |
 | `com.samsung.android.net.wifi.wifiguider` | Samsung | Wi-Fi "guider" - public Wi-Fi suggestions and captive-portal ads |
-| `com.samsung.android.app.updatecenter` | Samsung | Galaxy Store app-update checker (system updates still work) |
 | `com.samsung.android.smartswitchassistant` | Samsung | Smart Switch helper service |
 | `com.sec.android.easyMover` | Samsung | Smart Switch (phone-to-tablet migration wizard) |
 | `com.sec.android.easyMover.Agent` | Samsung | Smart Switch background agent |
@@ -149,7 +148,7 @@ ARCore, Link-to-Windows and the Samsung TTS language packs (which are large).
 | `com.samsung.android.game.gametools` | Samsung | Game Launcher / in-game overlay tools |
 | `com.samsung.gpuwatchapp` | Samsung | GPU watchdog used by Game Launcher |
 
-## Tier 3 - aggressive (177 packages total)
+## Tier 3 - aggressive (159 packages total)
 
 Adds full apps you can replace with something better, plus the telephony stack
 (this tablet has no SIM slot). Read the notes before applying - a few of these
@@ -179,35 +178,18 @@ are things people genuinely use.
 | `com.microsoft.teams` | Microsoft | Microsoft Teams |
 | `com.samsung.android.app.reminder` | Samsung | Samsung Reminder |
 | `com.samsung.android.app.notes` | Samsung | Samsung Notes (remove only if you don't use it - it is your heaviest app) |
-| `com.samsung.android.lool` | Samsung | Device Care (battery/storage/security dashboard) |
 | `com.samsung.android.kidsinstaller` | Samsung | Samsung Kids |
 | `com.samsung.android.scloud` | Samsung | Samsung Cloud sync/backup |
 | `com.samsung.android.mobileservice` | Samsung | Samsung account social/backup plumbing |
 | `com.samsung.android.samsungpass` | Samsung | Samsung Pass password vault |
 | `com.samsung.android.samsungpassautofill` | Samsung | Samsung Pass autofill |
 | `com.samsung.android.authfw` | Samsung | Samsung Pass authentication framework |
-| `com.sec.android.app.samsungapps` | Samsung | Galaxy Store |
 | `com.samsung.android.photoremasterservice` | Samsung | Galaxy Enhance-X AI photo remaster engine |
 | `com.samsung.android.visual.cloudcore` | Samsung | Cloud AI vision backend |
 | `com.samsung.android.homemode` | Samsung | SmartThings Home Mode automation |
 | `com.samsung.android.service.stplatform` | Samsung | SmartThings platform service |
 | `com.samsung.android.service.tagservice` | Samsung | SmartThings tag/location service |
 | `com.samsung.android.app.find` | Samsung | SmartThings Find (device tracker) |
-| `com.samsung.android.smartface` | Samsung | Face-unlock engine |
-| `com.samsung.android.smartface.overlay` | Samsung | Face-unlock overlay resources |
-| `com.samsung.android.smartmirroring` | Samsung | Smart View screen mirroring (Miracast) |
-| `com.samsung.android.audiomirroring` | Samsung | Audio mirroring to TVs |
-| `com.samsung.android.allshare.service.mediashare` | Samsung | DLNA media sharing service |
-| `com.samsung.android.inputshare` | Samsung | Input sharing to other Galaxy devices |
-| `com.samsung.android.secondconnection` | Samsung | Second-connection service (tablet <-> phone bridge) |
-| `com.samsung.android.secondscreen` | Samsung | Use tablet as a second screen |
-| `com.samsung.android.hwresourceshare` | Samsung | Hardware resource sharing (keyboard/mouse share) |
-| `com.samsung.android.hwresourceshare.storage` | Samsung | Hardware resource sharing - storage |
-| `com.samsung.android.mdx` | Samsung | Samsung DeX / Multi Device Experience |
-| `com.samsung.android.mdx.kit` | Samsung | MDX SDK runtime |
-| `com.samsung.android.mcfds` | Samsung | Multi Control file drop service |
-| `com.samsung.android.mcfserver` | Samsung | Multi Control server |
-| `com.samsung.android.mcf.autohotspot` | Samsung | Multi Control auto-hotspot |
 | `com.samsung.android.dialer` | Samsung | Phone dialer |
 | `com.samsung.android.incallui` | Samsung | In-call UI |
 | `com.samsung.android.app.telephonyui` | Samsung | Telephony settings UI fragments |

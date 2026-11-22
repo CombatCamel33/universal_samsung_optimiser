@@ -85,7 +85,6 @@
 2	com.samsung.android.aware.service	Samsung	Nearby-device awareness service for SmartThings
 2	com.samsung.android.easysetup	Samsung	Easy Setup / Quick Share handshake service
 2	com.samsung.android.net.wifi.wifiguider	Samsung	Wi-Fi "guider" - public Wi-Fi suggestions and captive-portal ads
-2	com.samsung.android.app.updatecenter	Samsung	Galaxy Store app-update checker (system updates still work)
 2	com.samsung.android.smartswitchassistant	Samsung	Smart Switch helper service
 2	com.sec.android.easyMover	Samsung	Smart Switch (phone-to-tablet migration wizard)
 2	com.sec.android.easyMover.Agent	Samsung	Smart Switch background agent
@@ -153,37 +152,19 @@
 3	com.microsoft.teams	Microsoft	Microsoft Teams
 3	com.samsung.android.app.reminder	Samsung	Samsung Reminder
 3	com.samsung.android.app.notes	Samsung	Samsung Notes (remove only if you don't use it - it is your heaviest app)
-3	com.samsung.android.lool	Samsung	Device Care (battery/storage/security dashboard)
 3	com.samsung.android.kidsinstaller	Samsung	Samsung Kids
 3	com.samsung.android.scloud	Samsung	Samsung Cloud sync/backup
 3	com.samsung.android.mobileservice	Samsung	Samsung account social/backup plumbing
 3	com.samsung.android.samsungpass	Samsung	Samsung Pass password vault
 3	com.samsung.android.samsungpassautofill	Samsung	Samsung Pass autofill
 3	com.samsung.android.authfw	Samsung	Samsung Pass authentication framework
-3	com.sec.android.app.samsungapps	Samsung	Galaxy Store
 3	com.samsung.android.photoremasterservice	Samsung	Galaxy Enhance-X AI photo remaster engine
 3	com.samsung.android.visual.cloudcore	Samsung	Cloud AI vision backend
 3	com.samsung.android.homemode	Samsung	SmartThings Home Mode automation
 3	com.samsung.android.service.stplatform	Samsung	SmartThings platform service
 3	com.samsung.android.service.tagservice	Samsung	SmartThings tag/location service
 3	com.samsung.android.app.find	Samsung	SmartThings Find (device tracker)
-3	com.samsung.android.smartface	Samsung	Face-unlock engine
-3	com.samsung.android.smartface.overlay	Samsung	Face-unlock overlay resources
 
-# ---------------------------------------------------------------- TIER 3: casting / continuity / second screen
-3	com.samsung.android.smartmirroring	Samsung	Smart View screen mirroring (Miracast)
-3	com.samsung.android.audiomirroring	Samsung	Audio mirroring to TVs
-3	com.samsung.android.allshare.service.mediashare	Samsung	DLNA media sharing service
-3	com.samsung.android.inputshare	Samsung	Input sharing to other Galaxy devices
-3	com.samsung.android.secondconnection	Samsung	Second-connection service (tablet <-> phone bridge)
-3	com.samsung.android.secondscreen	Samsung	Use tablet as a second screen
-3	com.samsung.android.hwresourceshare	Samsung	Hardware resource sharing (keyboard/mouse share)
-3	com.samsung.android.hwresourceshare.storage	Samsung	Hardware resource sharing - storage
-3	com.samsung.android.mdx	Samsung	Samsung DeX / Multi Device Experience
-3	com.samsung.android.mdx.kit	Samsung	MDX SDK runtime
-3	com.samsung.android.mcfds	Samsung	Multi Control file drop service
-3	com.samsung.android.mcfserver	Samsung	Multi Control server
-3	com.samsung.android.mcf.autohotspot	Samsung	Multi Control auto-hotspot
 
 # ---------------------------------------------------------------- TIER 3: telephony stack (Wi-Fi-only tablet)
 3	com.samsung.android.dialer	Samsung	Phone dialer

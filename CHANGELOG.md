@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.3
+
+- `aggressive` keeps **Device Care** (`com.samsung.android.lool`).
+- Aggressive is now 159 packages (30 / 80 / 159), 150 removals per user.
+- README results table refreshed with the final aggressive numbers after the
+  Galaxy Store / continuity / Device Care restores.
+
+## 1.2.2
+
+- `aggressive` no longer touches Galaxy Store, face unlock, Smart View / audio mirroring,
+  second-screen mode, DeX/MDX, Multi Control or hardware resource sharing.
+- `com.samsung.android.app.updatecenter` (Galaxy Store's update component) is kept too.
+- Aggressive is now 160 packages (30 / 110 / 160).
+- README corrected: DeX, Smart View, second screen, face unlock and Galaxy Store all keep
+  working; continuity stack is explicitly left installed.
+
 ## 1.2.1
 
 - Removed `com.samsung.android.fmm` (Find My Mobile) from tier 3 - Samsung blocks both

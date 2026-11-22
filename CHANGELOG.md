@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1
+
+- Removed `com.samsung.android.fmm` (Find My Mobile) from tier 3 - Samsung blocks both
+  `pm uninstall` and `pm disable-user` on it, so it can only be removed with root.
+  Aggressive is now 177 packages.
+- README: added a before / `balanced` / `aggressive` results table and a section on
+  what aggressive removes and what stops working.
+
 ## 1.2.0
 
 - **Preloads now lose their app data too.** `/data`-installed preloads are removed with

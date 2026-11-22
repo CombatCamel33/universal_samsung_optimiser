@@ -167,7 +167,6 @@
 3	com.samsung.android.service.stplatform	Samsung	SmartThings platform service
 3	com.samsung.android.service.tagservice	Samsung	SmartThings tag/location service
 3	com.samsung.android.app.find	Samsung	SmartThings Find (device tracker)
-3	com.samsung.android.fmm	Samsung	Find My Mobile
 3	com.samsung.android.smartface	Samsung	Face-unlock engine
 3	com.samsung.android.smartface.overlay	Samsung	Face-unlock overlay resources
 

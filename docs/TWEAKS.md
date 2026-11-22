@@ -149,7 +149,7 @@ ARCore, Link-to-Windows and the Samsung TTS language packs (which are large).
 | `com.samsung.android.game.gametools` | Samsung | Game Launcher / in-game overlay tools |
 | `com.samsung.gpuwatchapp` | Samsung | GPU watchdog used by Game Launcher |
 
-## Tier 3 - aggressive (178 packages total)
+## Tier 3 - aggressive (177 packages total)
 
 Adds full apps you can replace with something better, plus the telephony stack
 (this tablet has no SIM slot). Read the notes before applying - a few of these
@@ -193,7 +193,6 @@ are things people genuinely use.
 | `com.samsung.android.service.stplatform` | Samsung | SmartThings platform service |
 | `com.samsung.android.service.tagservice` | Samsung | SmartThings tag/location service |
 | `com.samsung.android.app.find` | Samsung | SmartThings Find (device tracker) |
-| `com.samsung.android.fmm` | Samsung | Find My Mobile |
 | `com.samsung.android.smartface` | Samsung | Face-unlock engine |
 | `com.samsung.android.smartface.overlay` | Samsung | Face-unlock overlay resources |
 | `com.samsung.android.smartmirroring` | Samsung | Smart View screen mirroring (Miracast) |

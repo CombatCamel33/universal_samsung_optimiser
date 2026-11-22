@@ -26,18 +26,27 @@ The script is generic: it only touches packages that actually exist on your devi
 
 ## Results on the test tablet
 
-Measured after applying `balanced` and rebooting:
+Measured on a real SM-X620 after each profile and a reboot:
 
-| Metric | Before | After |
-|---|---|---|
-| Installed packages (user 10) | 515 | **409** |
-| Installed packages (user 0) | 443 | **336** |
-| Available RAM (`MemAvailable`) | ~2.4 GB | **~3.2 GB** |
-| Animation scales | 1.5× / 1.5× / 1.5× (stock is 1.0×) | **0.5×** |
-| Always-on background scanners | Wi-Fi + BLE + location history | **off** |
-| Samsung telemetry agents | 5 running | **0** |
+| Metric | Before | `balanced` | `aggressive` |
+|---|---|---|---|
+| Installed packages (user 10) | 515 | 409 | **346** |
+| Installed packages (user 0) | 443 | 336 | **274** |
+| Packages removed | - | 106 | **169** |
+| Available RAM (`MemAvailable`) | ~2.4 GB | ~3.2 GB | **~4.0 GB** |
+| Storage used / free | 83 GB / 21 GB | 78 GB / 25 GB | **74 GB / 29 GB** |
+| Animation scales | 1.5× / 1.5× / 1.5× (stock 1.0×) | 0.5× | **0.5×** |
+| Min refresh rate | unset (drops to 30 Hz) | 60 Hz | **90 Hz (locked)** |
+| Processing speed | Optimised | High | **High** |
+| Background Wi-Fi/BLE scanning | on | off | **off** |
+| Samsung telemetry agents | 5 running | 0 | **0** |
 
-RAM numbers move around with what you have open — the point is that roughly 100 background services no longer start at boot.
+`aggressive` additionally deletes the `/data` preloads outright, which is where most of
+the extra 4 GB of storage comes from (Office, Teams, Samsung Notes, Samsung Internet...).
+
+RAM numbers move around with what you have open — the point is that ~170 packages no
+longer start at boot. After the aggressive run the only things left in the top RAM list
+were the launcher, System UI, Play Services and the keyboard.
 
 ## Requirements
 
@@ -84,13 +93,64 @@ Every profile is cumulative: `balanced` includes `light`, `aggressive` includes 
 |---|---|---|
 | `light` | 30 | Pure telemetry, diagnostics, factory test apps, AR-emoji toys, the preloaded Asphalt demo, duplicate CTS shims |
 | `balanced` | 111 | + Bixby, Samsung Customization/Context services, Device Security (McAfee), Edge panels, Modes & Routines, Digital Wellbeing, Game Optimizing Service, 18 Samsung TTS language packs, ARCore, Link-to-Windows |
-| `aggressive` | 178 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Galaxy Store, Samsung Pass/Cloud, SmartThings, casting/second-screen stack, telephony stack (Wi-Fi-only tablet) |
+| `aggressive` | 177 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Galaxy Store, Samsung Pass/Cloud, SmartThings, casting/second-screen stack, telephony stack (Wi-Fi-only tablet) |
 | `--extras` | +17 | Knox/Secure Folder, OTA updater, Samsung account. **Opt-in only** — breaks Secure Folder and security updates |
 | `--disable-preloads` | flag | Hides `/data`-installed preloads instead of deleting them, so they stay restorable |
 
 `light` is safe for anyone. `balanced` is what I run daily. `aggressive` is for a tablet used as a browser + media device.
 
 Full per-package explanation: **[docs/TWEAKS.md](docs/TWEAKS.md)**.
+
+## What `aggressive` removes - and what stops working
+
+`aggressive` is meant for a tablet used as a browser + media device. It removes whole
+apps, not just background services, so read this before running it.
+
+**Removed app groups**
+
+| Group | Apps |
+|---|---|
+| Browsers | Chrome, Samsung Internet (keep Brave/Firefox/whatever you installed) |
+| Google | YouTube, Google app (Search/Discover/Assistant), Maps, Gmail, Photos, Messages, Meet, Gemini, Voice Access, print spooler |
+| Microsoft | Word, Excel, PowerPoint, OneNote, Outlook, Teams, OneDrive - **APK and data** |
+| Samsung | Notes, Reminder, Device Care, Galaxy Store, Samsung Pass + autofill, Samsung Cloud, Samsung Kids, SmartThings, Find My Mobile, face-unlock engine, Photo Remaster |
+| Continuity | Smart View, audio mirroring, DLNA, Input sharing, second screen, DeX/MDX, Multi Control |
+| Telephony | Dialer, in-call UI, telephony UI, call assistant, smart call, Emergency SOS, IMS/VoLTE, MMS, SIM dialogs |
+
+**What stops working**
+
+- No built-in browser, YouTube, Gmail, Maps, Photos or Google Assistant/Discover.
+- **Samsung Notes is deleted together with its local notes** - back it up first.
+- No Galaxy Store (Play Store still works), no Samsung Pass autofill.
+- No screen mirroring, casting, DeX or second-screen mode.
+- No dialer or Emergency SOS (the Wi-Fi-only tablet has no SIM anyway).
+- Face unlock stops working; PIN/pattern/fingerprint are unaffected.
+
+**What keeps working**
+
+Camera, Gallery, My Files, Clock, Calculator, Contacts, Calendar, Settings, Samsung
+keyboard, the launcher, Play Store, Google Play Services, S Pen / Air Command, Quick
+Share, Good Lock, Video Editor, and **Secure Folder** (user 150 is never touched).
+
+Everything above is restorable with `./run.sh --restore` **except** the `/data`-installed
+preloads (Office, Notes, Samsung Internet, Reminder), whose APK and data are deleted by
+design - reinstall those from the Play Store.
+
+One package is not in any profile on purpose: `com.samsung.android.fmm` (Find My Mobile).
+Samsung blocks both `pm uninstall` and `pm disable-user` on it, so it can only be removed
+with root. It is left installed and idle.
+
+## Maintenance tasks
+
+```bash
+./run.sh balanced --trim      # clear app caches (pm trim-caches 64G)
+./run.sh balanced --dexopt    # optimise every app's bytecode (slow, run once)
+./run.sh --reboot             # reboot when the run finishes
+./run.sh --report             # RAM, storage, top consumers, versions
+```
+
+`--trim` usually frees a few GB on a tablet that has been used for a while.
+`--dexopt` can take 5-15 minutes; it improves cold-start times until the next OTA.
 
 ## The system tweaks (all profiles)
 

@@ -49,9 +49,10 @@ Packages that live in the read-only system image are removed per user profile wi
 
 A handful of preloads are installed into `/data` instead of the system image
 (Microsoft Office, Samsung Notes, Samsung Internet, the Asphalt demo...). Those are
-**disabled** with `pm disable-user --user N` rather than uninstalled, because
-uninstalling them would delete the APK for good. Disabled packages are hidden, cannot
-run and cannot start at boot - and `pm enable` brings them back instantly.
+deleted like everything else (`pm uninstall -k`, data kept), but because the APK is not
+in the system image they cannot be restored with `pm install-existing` - they have to be
+downloaded again from the store. Pass `--disable-preloads` to hide them instead and keep
+them restorable with `pm enable`.
 
 Nothing here needs root.
 
@@ -102,9 +103,10 @@ Applied with `settings put <namespace> <key> <value>` and restored from
 
 **Animation scales (tier 1)** - `window_animation_scale`, `transition_animation_scale`
 and `animator_duration_scale` control how long Android spends animating windows,
-transitions and in-app motion. Samsung shipped this tablet at **1.5x**, which is why
-it feels slow next to a Pixel. `0.5` is the sweet spot: visibly faster, still smooth.
-`0` makes things feel broken, so the script never uses it.
+transitions and in-app motion. The stock One UI value is **1.0x**; `0.5` is the sweet
+spot - visibly faster, still smooth. `0` makes things feel broken, so the script never
+uses it. (This particular tablet had been set to 1.5x before the optimiser ran, which is
+why the before/after table shows 1.5x.)
 
 **`cached_apps_freezer` (tier 1)** - Android keeps recently used apps in a "cached"
 state in RAM. With the freezer enabled, they are frozen (CPU and wakelocks stopped)

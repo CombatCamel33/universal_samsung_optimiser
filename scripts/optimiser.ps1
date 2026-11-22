@@ -12,7 +12,7 @@
 #>
 
 $ErrorActionPreference = 'Continue'
-$Version = '1.0.0'
+$Version = '1.1.0'
 $Root    = Split-Path -Parent $PSScriptRoot
 $Profiles = Join-Path $Root 'profiles'
 $Backups  = Join-Path $Root 'backups'
@@ -22,6 +22,7 @@ $script:Profile   = ''
 $script:DryRun    = $false
 $script:AssumeYes = $false
 $script:Extras    = $false
+$script:DisablePreloads = $false
 $script:Trim      = $false
 $script:Dexopt    = $false
 $script:Reboot    = $false
@@ -64,6 +65,8 @@ Options
   -User <id>        only touch this Android user (repeatable)
   -AllUsers         every real user profile (default: all except Secure Folder)
   -Extras           also remove Knox / OTA / Samsung account (breaks Secure Folder)
+  -DisablePreloads  hide /data-installed preloads instead of deleting them
+                    (Office, Notes, Samsung Internet... stay on disk, restorable)
   -Trim             clear app caches
   -Dexopt           run a background dexopt job now (slow, optimises app start-up)
   -Reboot           reboot when finished
@@ -270,14 +273,20 @@ function Invoke-ApplyPackage {
   if (-not (Test-Installed -User $User -Package $Package)) { return 3 }
 
   if ($script:DryRun) {
-    Write-Host ("    {0,-48} {1}" -f $Package, $Category) -ForegroundColor DarkGray
+    $isSystem = Test-SystemPackage -User $User -Package $Package
+    if (-not $isSystem -and $script:DisablePreloads) {
+      Write-Host ("    {0,-48} {1} (preload: would disable)" -f $Package, $Category) -ForegroundColor DarkGray
+    } elseif (-not $isSystem) {
+      Write-Host ("    {0,-48} {1} (preload: would delete)" -f $Package, $Category) -ForegroundColor DarkGray
+    } else {
+      Write-Host ("    {0,-48} {1}" -f $Package, $Category) -ForegroundColor DarkGray
+    }
     return 0
   }
 
-  # Only packages from the read-only system image can be restored with
-  # "pm install-existing". Data-installed preloads are disabled instead so they
-  # are never deleted for good.
-  if (Test-SystemPackage -User $User -Package $Package) {
+  # Data-installed preloads are deleted like everything else. Pass
+  # -DisablePreloads to hide them instead and keep them restorable.
+  if (-not $script:DisablePreloads -or (Test-SystemPackage -User $User -Package $Package)) {
     $out = Invoke-Shell "pm uninstall -k --user $User '$Package'"
     if ($out -match 'Success') {
       Add-Content -LiteralPath $script:Manifest -Value ("{0}`t{1}`tuninstalled`t{2}" -f $User, $Package, $Category) -Encoding ASCII
@@ -436,6 +445,7 @@ function Invoke-Apply {
   Say "  Settings   : $(@(Get-SettingRows -MaxTier $tier).Count)"
   Say "  Users      : $($users -join ' ')"
   if ($script:Extras) { Warn 'extras enabled - Knox / OTA / Samsung account will be removed' }
+  if ($script:DisablePreloads) { Say '  Preloads   : disabled (kept on disk) instead of deleted' }
   if ($script:DryRun) { Warn 'dry run - nothing will change' }
 
   if (-not $script:DryRun -and -not $script:AssumeYes) {
@@ -625,6 +635,7 @@ for ($i = 0; $i -lt $argsList.Count; $i++) {
     '^-DryRun$'                     { $script:DryRun = $true }
     '^-Yes$|^-y$'                   { $script:AssumeYes = $true }
     '^-Extras$'                     { $script:Extras = $true }
+    '^-DisablePreloads$'            { $script:DisablePreloads = $true }
     '^-Trim$'                       { $script:Trim = $true }
     '^-Dexopt$'                     { $script:Dexopt = $true }
     '^-Reboot$'                     { $script:Reboot = $true }

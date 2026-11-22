@@ -12,7 +12,7 @@
 #
 set -u
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILES="$ROOT/profiles"
 BACKUPS="$ROOT/backups"
@@ -43,6 +43,7 @@ PROFILE=""
 DRY_RUN=0
 ASSUME_YES=0
 WANT_EXTRAS=0
+DISABLE_PRELOADS=0
 WANT_TRIM=0
 WANT_DEXOPT=0
 WANT_REBOOT=0
@@ -70,6 +71,8 @@ ${C_BOLD}Options${C_RESET}
   --user <id>        only touch this Android user (repeatable)
   --all-users        every real user profile (default: all except Secure Folder)
   --extras           also remove Knox / OTA / Samsung account (breaks Secure Folder)
+  --disable-preloads hide /data-installed preloads instead of deleting them
+                     (Office, Notes, Samsung Internet... stay on disk, restorable)
   --trim             clear app caches (pm trim-caches)
   --dexopt           run a background dexopt job now (slow, optimises app start-up)
   --reboot           reboot when finished
@@ -244,14 +247,21 @@ apply_pkg() { # apply_pkg <user> <package> <category>
   fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf '    %s%-46s%s %s\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
+    if [ "$DISABLE_PRELOADS" -eq 1 ] && ! pkg_is_system "$u" "$pkg"; then
+      printf '    %s%-46s%s %s (preload: would disable)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
+    elif ! pkg_is_system "$u" "$pkg"; then
+      printf '    %s%-46s%s %s (preload: would delete)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
+    else
+      printf '    %s%-46s%s %s\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
+    fi
     return 0
   fi
 
-  # Only packages that live in the read-only system image can be re-installed with
-  # "pm install-existing". A data-installed preload would be deleted for good, so
-  # those are disabled instead - hidden, stopped, but 100% reversible.
-  if pkg_is_system "$u" "$pkg"; then
+  # Data-installed preloads (Office, Samsung Notes, Samsung Internet, ...) are
+  # deleted like everything else: "pm uninstall -k --user N" removes the APK and
+  # keeps app data. Use --disable-preloads to hide them instead, which stays
+  # restorable even after the APK is gone.
+  if [ "$DISABLE_PRELOADS" -eq 0 ] || pkg_is_system "$u" "$pkg"; then
     out="$(adbs "pm uninstall -k --user $u '$pkg'")"
     case "$out" in
       *Success*)
@@ -408,6 +418,7 @@ do_apply() {
   say "  Settings   : $(awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$PROFILES/settings.tsv" | wc -l | tr -d ' ')"
   say "  Users      : $(printf '%s' "$users" | tr '\n' ' ')"
   [ "$WANT_EXTRAS" -eq 1 ] && say "  Extras     : ${C_YELLOW}yes - Knox / OTA / Samsung account will be removed${C_RESET}"
+  [ "$DISABLE_PRELOADS" -eq 1 ] && say "  Preloads   : disabled (kept on disk) instead of deleted"
   [ "$DRY_RUN" -eq 1 ] && say "  Mode       : ${C_YELLOW}dry run - nothing will change${C_RESET}"
 
   if [ "$DRY_RUN" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
@@ -609,6 +620,7 @@ while [ $# -gt 0 ]; do
     --dry-run)   DRY_RUN=1; shift ;;
     --yes|-y)    ASSUME_YES=1; shift ;;
     --extras)    WANT_EXTRAS=1; shift ;;
+    --disable-preloads) DISABLE_PRELOADS=1; shift ;;
     --trim)      WANT_TRIM=1; shift ;;
     --dexopt)    WANT_DEXOPT=1; shift ;;
     --reboot)    WANT_REBOOT=1; shift ;;

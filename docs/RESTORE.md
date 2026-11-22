@@ -103,21 +103,22 @@ Android has two kinds of "preinstalled" app:
    `/system_ext`, `/vendor`). `pm uninstall --user 0` only marks it uninstalled for that
    user; the APK stays, so `pm install-existing` always works.
 2. **Data-installed preloads** - Samsung shipped the app, but its APK lives in
-   `/data/app`. If the last user is uninstalled, Android deletes the APK and the app
-   is gone until you download it again.
+   `/data/app`. Uninstalling the last user deletes the APK, so the app is gone until you
+   download it again. The scripts delete these too (default), unless you pass
+   `--disable-preloads`.
 
 Real examples from a Galaxy Tab S10 FE+ (Android 16):
 
-| Package | APK location | Restorable? |
-|---|---|---|
-| `com.microsoft.office.word` | `/data/app/~~duG82SZdq1_3U6G_f7mn7w==/.../base.apk` | no - disabled instead |
-| `com.microsoft.office.excel` | `/data/app/~~VyE9HeGSP9YgrE7L-9ZRiA==/.../base.apk` | no - disabled instead |
-| `com.microsoft.teams` | `/data/app/~~ZvIH_3AsYNshnhSQ2fSLvg==/.../base.apk` | no - disabled instead |
-| `com.samsung.android.app.notes` | `/data/app/~~YGHjeOYI23jGAPqDKhLaAA==/.../base.apk` | no - disabled instead |
-| `com.samsung.android.app.reminder` | `/data/app/~~ZSRowudJRoapTgWUpt2gDw==/.../base.apk` | no - disabled instead |
-| `com.sec.android.app.sbrowser` | `/data/app/~~TlWrT3SXNB-W8ZzlGzgnuA==/.../base.apk` | no - disabled instead |
-| `com.gameloft.android.ANMP.GloftA9HM` | `/data/app/...` (Asphalt 9 demo) | no - disabled instead |
-| `com.samsung.SMT.lang_en_gb_l02` | `/data/app/...` (TTS voice) | no - disabled instead |
+| Package | APK location | Default | With `--disable-preloads` |
+|---|---|---|---|
+| `com.microsoft.office.word` | `/data/app/~~duG82SZdq1_3U6G_f7mn7w==/.../base.apk` | deleted | disabled |
+| `com.microsoft.office.excel` | `/data/app/~~VyE9HeGSP9YgrE7L-9ZRiA==/.../base.apk` | deleted | disabled |
+| `com.microsoft.teams` | `/data/app/~~ZvIH_3AsYNshnhSQ2fSLvg==/.../base.apk` | deleted | disabled |
+| `com.samsung.android.app.notes` | `/data/app/~~YGHjeOYI23jGAPqDKhLaAA==/.../base.apk` | deleted | disabled |
+| `com.samsung.android.app.reminder` | `/data/app/~~ZSRowudJRoapTgWUpt2gDw==/.../base.apk` | deleted | disabled |
+| `com.sec.android.app.sbrowser` | `/data/app/~~TlWrT3SXNB-W8ZzlGzgnuA==/.../base.apk` | deleted | disabled |
+| `com.gameloft.android.ANMP.GloftA9HM` | `/data/app/...` (Asphalt 9 demo) | deleted | disabled |
+| `com.samsung.SMT.lang_en_gb_l02` | `/data/app/...` (TTS voice) | deleted | disabled |
 
 A system app that has been **updated from the store** also shows a `/data/app` path,
 but it is still restorable because the original APK is in the system image:
@@ -137,7 +138,14 @@ adb shell pm list packages -s --user 0 | grep -x package:com.example.app
 ```
 
 * **in the list** -> `pm uninstall -k --user N` (restorable)
-* **not in the list** -> `pm disable-user --user N` (hidden, stopped, restorable with `pm enable`)
+* **not in the list** -> deleted by default, or disabled with `--disable-preloads`
+
+To keep preloads restorable, run the profile like this:
+
+```bash
+./run.sh balanced --disable-preloads      # macOS / Linux
+.\run.ps1 balanced -DisablePreloads      # Windows
+```
 
 Check what is currently disabled, or bring one back:
 

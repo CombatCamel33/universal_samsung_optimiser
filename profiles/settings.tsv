@@ -5,9 +5,9 @@
 # Use the literal __DELETE__ as a value to remove a setting instead of writing one.
 
 # ---------------------------------------------------------------- TIER 1: instant responsiveness
-1	global	window_animation_scale	0.5	Halve window-open animation duration (was 1.5x on this tablet)
-1	global	transition_animation_scale	0.5	Halve transition animation duration
-1	global	animator_duration_scale	0.5	Halve animator duration - the single biggest "feels faster" win
+1	global	window_animation_scale	0.5	Halve the stock 1.0x window-open animation duration
+1	global	transition_animation_scale	0.5	Halve the stock 1.0x transition animation duration
+1	global	animator_duration_scale	0.5	Halve the stock 1.0x animator duration - the biggest "feels faster" win
 1	global	cached_apps_freezer	enabled	Freeze cached background apps instead of keeping them in RAM
 1	system	peak_refresh_rate	90	Never cap the 90 Hz panel
 

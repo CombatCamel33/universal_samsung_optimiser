@@ -33,7 +33,7 @@ Measured after applying `balanced` and rebooting:
 | Installed packages (user 10) | 515 | **409** |
 | Installed packages (user 0) | 443 | **336** |
 | Available RAM (`MemAvailable`) | ~2.4 GB | **~3.2 GB** |
-| Animation scales | 1.5× / 1.5× / 1.5× | **0.5×** |
+| Animation scales | 1.5× / 1.5× / 1.5× (stock is 1.0×) | **0.5×** |
 | Always-on background scanners | Wi-Fi + BLE + location history | **off** |
 | Samsung telemetry agents | 5 running | **0** |
 
@@ -86,6 +86,7 @@ Every profile is cumulative: `balanced` includes `light`, `aggressive` includes 
 | `balanced` | 111 | + Bixby, Samsung Customization/Context services, Device Security (McAfee), Edge panels, Modes & Routines, Digital Wellbeing, Game Optimizing Service, 18 Samsung TTS language packs, ARCore, Link-to-Windows |
 | `aggressive` | 178 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Galaxy Store, Samsung Pass/Cloud, SmartThings, casting/second-screen stack, telephony stack (Wi-Fi-only tablet) |
 | `--extras` | +17 | Knox/Secure Folder, OTA updater, Samsung account. **Opt-in only** — breaks Secure Folder and security updates |
+| `--disable-preloads` | flag | Hides `/data`-installed preloads instead of deleting them, so they stay restorable |
 
 `light` is safe for anyone. `balanced` is what I run daily. `aggressive` is for a tablet used as a browser + media device.
 
@@ -95,7 +96,7 @@ Full per-package explanation: **[docs/TWEAKS.md](docs/TWEAKS.md)**.
 
 | Tweak | Why |
 |---|---|
-| `window_animation_scale` → `0.5` | Samsung shipped this tablet at 1.5×. Halving it makes every window feel instant. |
+| `window_animation_scale` → `0.5` | Halves the stock 1.0× duration. Every window feels instant instead of sluggish. |
 | `transition_animation_scale` → `0.5` | Same for app-switch transitions. |
 | `animator_duration_scale` → `0.5` | Same for in-app animations. |
 | `cached_apps_freezer` → `enabled` | Freezes cached background apps instead of keeping them resident. |
@@ -109,11 +110,13 @@ Full per-package explanation: **[docs/TWEAKS.md](docs/TWEAKS.md)**.
 
 Nothing is deleted. Packages are removed **per user profile** with `pm uninstall -k --user N`, which keeps all app data, and every action is written to `backups/` before it happens.
 
-Packages that live in `/data` rather than the read-only system image (Microsoft Office,
-Samsung Notes, Samsung Internet, the Asphalt demo...) are **disabled** instead of
-uninstalled, because uninstalling those would delete the APK permanently. A disabled
-package is hidden, cannot run and cannot start at boot - and `pm enable` restores it
-instantly.
+Data-installed preloads (Microsoft Office, Samsung Notes, Samsung Internet, the Asphalt
+demo...) are deleted too: `pm uninstall -k` removes the APK and keeps the app data.
+Because their APK is not in the read-only system image they cannot be restored with
+`pm install-existing` - they have to be downloaded again from the store.
+
+If you want to keep that option, add `--disable-preloads`: those apps are then hidden
+and stopped but stay on disk, and `pm enable` brings them back instantly.
 
 ```
 backups/
@@ -134,12 +137,13 @@ On Windows: `.\run.ps1 -Restore`, `.\run.ps1 -RestoreAll`.
 
 Restoring puts the packages back exactly as they were (same user, data intact). Reboot afterwards.
 
-The only things a restore cannot bring back are packages that were already installed
-from the store as updates and then removed on a build where the system image did not
-contain them. On the test tablet that was exactly two items - the preloaded Asphalt 9
-demo and a duplicate English (UK) TTS voice - both re-downloadable from the Galaxy/Play
-Store. The script now detects this case and disables those packages instead, so it
-cannot happen again.
+What a restore cannot bring back are **data-installed preloads** (Office, Samsung
+Notes, Samsung Internet, the Asphalt demo, some TTS voices) - their APK is not in the
+system image, so they have to be re-downloaded. On the test tablet that was two items:
+the preloaded Asphalt 9 demo and a duplicate English (UK) TTS voice. Everything else
+came back in a full restore test (514 of 515 packages, all settings).
+
+Use `--disable-preloads` if you want those to stay restorable.
 
 ## Other options
 
@@ -161,7 +165,7 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 ## Safety
 
 - **No root.** Everything uses the normal ADB shell API.
-- **Never deletes app data.** `-k` keeps data for every uninstall; `/data`-installed preloads are only disabled.
+- **Never deletes app data.** `-k` keeps app data for every uninstall, preloads included.
 - **Protected-package blocklist** in both scripts refuses to touch `systemui`, `settings`, `gms`, `vending`, the launcher, the keyboard, permission controllers, etc.
 - **Idempotent.** Running a profile twice does nothing the second time.
 - **No OTA or Knox changes** unless you pass `--extras`.

@@ -148,7 +148,7 @@ ARCore, Link-to-Windows and the Samsung TTS language packs (which are large).
 | `com.samsung.android.game.gametools` | Samsung | Game Launcher / in-game overlay tools |
 | `com.samsung.gpuwatchapp` | Samsung | GPU watchdog used by Game Launcher |
 
-## Tier 3 - aggressive (159 packages total)
+## Tier 3 - aggressive (163 packages total)
 
 Adds full apps you can replace with something better, plus the telephony stack
 (this tablet has no SIM slot). Read the notes before applying - a few of these
@@ -160,6 +160,9 @@ are things people genuinely use.
 | `com.android.chrome` | Google | Chrome (Brave is installed) |
 | `com.sec.android.app.chromecustomizations` | Google | Chrome-only customisation overlay (useless once Chrome is gone) |
 | `com.google.android.youtube` | Google | YouTube app (ReVanced/Morphe YouTube is installed instead) |
+| `com.google.android.apps.youtube.music` | Google | YouTube Music (Morphe YouTube Music is installed instead) |
+| `com.google.android.apps.docs` | Google | Google Drive (15 GB cloud storage client) |
+| `com.google.android.apps.docs.editors.docs` | Google | Google Docs editor |
 | `com.google.android.apps.photos` | Google | Google Photos |
 | `com.google.android.gm` | Google | Gmail |
 | `com.google.android.apps.maps` | Google | Google Maps |
@@ -179,6 +182,7 @@ are things people genuinely use.
 | `com.samsung.android.app.reminder` | Samsung | Samsung Reminder |
 | `com.samsung.android.app.notes` | Samsung | Samsung Notes (remove only if you don't use it - it is your heaviest app) |
 | `com.samsung.android.kidsinstaller` | Samsung | Samsung Kids |
+| `com.sec.android.app.vepreload` | Samsung | Studio video editor (project picker + simple editor) |
 | `com.samsung.android.scloud` | Samsung | Samsung Cloud sync/backup |
 | `com.samsung.android.mobileservice` | Samsung | Samsung account social/backup plumbing |
 | `com.samsung.android.samsungpass` | Samsung | Samsung Pass password vault |

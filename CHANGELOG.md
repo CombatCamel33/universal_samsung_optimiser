@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5
+
+- `aggressive` now also removes **YouTube Music**, **Google Drive**, **Google Docs** and
+  the Samsung **Studio** video editor.
+- Aggressive is now 163 packages (30 / 80 / 163).
+- README results table refreshed (359 / 290 packages, 156 removals per user).
+
 ## 1.2.4
 
 - README: new "Reinstalling an app you actually want" section - Galaxy Store / Play Store

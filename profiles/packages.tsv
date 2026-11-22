@@ -134,6 +134,9 @@
 3	com.android.chrome	Google	Chrome (Brave is installed)
 3	com.sec.android.app.chromecustomizations	Google	Chrome-only customisation overlay (useless once Chrome is gone)
 3	com.google.android.youtube	Google	YouTube app (ReVanced/Morphe YouTube is installed instead)
+3	com.google.android.apps.youtube.music	Google	YouTube Music (Morphe YouTube Music is installed instead)
+3	com.google.android.apps.docs	Google	Google Drive (15 GB cloud storage client)
+3	com.google.android.apps.docs.editors.docs	Google	Google Docs editor
 3	com.google.android.apps.photos	Google	Google Photos
 3	com.google.android.gm	Google	Gmail
 3	com.google.android.apps.maps	Google	Google Maps
@@ -153,6 +156,7 @@
 3	com.samsung.android.app.reminder	Samsung	Samsung Reminder
 3	com.samsung.android.app.notes	Samsung	Samsung Notes (remove only if you don't use it - it is your heaviest app)
 3	com.samsung.android.kidsinstaller	Samsung	Samsung Kids
+3	com.sec.android.app.vepreload	Samsung	Studio video editor (project picker + simple editor)
 3	com.samsung.android.scloud	Samsung	Samsung Cloud sync/backup
 3	com.samsung.android.mobileservice	Samsung	Samsung account social/backup plumbing
 3	com.samsung.android.samsungpass	Samsung	Samsung Pass password vault

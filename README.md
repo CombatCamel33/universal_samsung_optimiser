@@ -30,9 +30,9 @@ Measured on a real SM-X620 after each profile and a reboot:
 
 | Metric | Before | `balanced` | `aggressive` |
 |---|---|---|---|
-| Installed packages (user 10) | 515 | 409 | **365** |
-| Installed packages (user 0) | 443 | 336 | **292** |
-| Packages removed | - | 105 | **150** |
+| Installed packages (user 10) | 515 | 409 | **359** |
+| Installed packages (user 0) | 443 | 336 | **290** |
+| Packages removed | - | 105 | **156** |
 | Available RAM (`MemAvailable`) | ~2.4 GB | ~3.2 GB | **~3.8 GB** |
 | Storage used / free | 83 GB / 21 GB | 78 GB / 25 GB | **75 GB / 29 GB** |
 | Animation scales | 1.5× / 1.5× / 1.5× (stock 1.0×) | 0.5× | **0.5×** |
@@ -44,9 +44,9 @@ Measured on a real SM-X620 after each profile and a reboot:
 `aggressive` additionally deletes the `/data` preloads outright, which is where most of
 the extra storage comes from (Office, Teams, Samsung Notes, Samsung Internet...).
 
-RAM numbers move around with what you have open — the point is that ~150 packages no
+RAM numbers move around with what you have open — the point is that ~155 packages no
 longer start at boot. Galaxy Store, Device Care, face unlock, DeX, Smart View and
-second-screen mode are kept on purpose, which is why aggressive removes 150 rather than 170. After the aggressive run the only things left in the top RAM list
+second-screen mode are kept on purpose, which is why aggressive removes ~156 rather than 175. After the aggressive run the only things left in the top RAM list
 were the launcher, System UI, Play Services and the keyboard.
 
 ## Requirements
@@ -94,7 +94,7 @@ Every profile is cumulative: `balanced` includes `light`, `aggressive` includes 
 |---|---|---|
 | `light` | 30 | Pure telemetry, diagnostics, factory test apps, AR-emoji toys, the preloaded Asphalt demo, duplicate CTS shims |
 | `balanced` | 110 | + Bixby, Samsung Customization/Context services, Device Security (McAfee), Edge panels, Modes & Routines, Digital Wellbeing, Game Optimizing Service, 18 Samsung TTS language packs, ARCore, Link-to-Windows |
-| `aggressive` | 159 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Samsung Pass/Cloud, SmartThings, telephony stack (Wi-Fi-only tablet) |
+| `aggressive` | 163 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Samsung Pass/Cloud, SmartThings, telephony stack (Wi-Fi-only tablet) |
 | `--extras` | +17 | Knox/Secure Folder, OTA updater, Samsung account. **Opt-in only** — breaks Secure Folder and security updates |
 | `--disable-preloads` | flag | Hides `/data`-installed preloads instead of deleting them, so they stay restorable |
 
@@ -112,14 +112,17 @@ apps, not just background services, so read this before running it.
 | Group | Apps |
 |---|---|
 | Browsers | Chrome, Samsung Internet (keep Brave/Firefox/whatever you installed) |
-| Google | YouTube, Google app (Search/Discover/Assistant), Maps, Gmail, Photos, Messages, Meet, Gemini, Voice Access, print spooler |
+| Google | YouTube, YouTube Music, Drive, Docs, Google app (Search/Discover/Assistant), Maps, Gmail, Photos, Messages, Meet, Gemini, Voice Access, print spooler |
 | Microsoft | Word, Excel, PowerPoint, OneNote, Outlook, Teams, OneDrive - **APK and data** |
-| Samsung | Notes, Reminder, Samsung Pass + autofill, Samsung Cloud, Samsung Kids, SmartThings, Find, Photo Remaster |
+| Samsung | Notes, Reminder, Studio video editor, Samsung Pass + autofill, Samsung Cloud, Samsung Kids, SmartThings, Find, Photo Remaster |
 | Telephony | Dialer, in-call UI, telephony UI, call assistant, smart call, Emergency SOS, IMS/VoLTE, MMS, SIM dialogs |
 
 **What stops working**
 
-- No built-in browser, YouTube, Gmail, Maps, Photos or Google Assistant/Discover.
+- No built-in browser, YouTube, YouTube Music, Drive, Docs, Gmail, Maps, Photos or
+  Google Assistant/Discover (Morphe/ReVanced YouTube and YouTube Music keep working if
+  you have them installed).
+- No Studio video editor.
 - **Samsung Notes is deleted together with its local notes** - back it up first.
 - No Samsung Pass autofill.
 - No dialer or Emergency SOS (the Wi-Fi-only tablet has no SIM anyway).
@@ -131,7 +134,7 @@ whenever you want it back - see [Reinstalling an app you actually want](#reinsta
 
 Camera, Gallery, My Files, Clock, Calculator, Contacts, Calendar, Settings, Samsung
 keyboard, the launcher, Play Store, **Galaxy Store**, **Device Care**, Google Play
-Services, S Pen / Air Command, Quick Share, Good Lock, Video Editor, **face unlock**,
+Services, S Pen / Air Command, Quick Share, Good Lock, **face unlock**,
 **Smart View / casting**, **DeX**, **second-screen mode** and **Multi Control**, and
 **Secure Folder** (user 150 is never touched).
 
@@ -140,8 +143,10 @@ Samsung's whole continuity stack (`mdx`, `mcf*`, `secondscreen`, `hwresourceshar
 second-screen mode work.
 
 Everything above is restorable with `./run.sh --restore` **except** the `/data`-installed
-preloads (Office, Notes, Samsung Internet, Reminder), whose APK and data are deleted by
-design - reinstall those from the Play Store.
+preloads (Office, Samsung Notes, Samsung Internet, Reminder, YouTube Music, Drive, Docs),
+whose APK and data are deleted by design - reinstall those from the Play Store or Galaxy
+Store. Studio, YouTube and everything else in the list are system apps, so `--restore`
+brings them back untouched.
 
 One package is not in any profile on purpose: `com.samsung.android.fmm` (Find My Mobile).
 Samsung blocks both `pm uninstall` and `pm disable-user` on it, so it can only be removed

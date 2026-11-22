@@ -104,21 +104,21 @@ Android has two kinds of "preinstalled" app:
    user; the APK stays, so `pm install-existing` always works.
 2. **Data-installed preloads** - Samsung shipped the app, but its APK lives in
    `/data/app`. Uninstalling the last user deletes the APK, so the app is gone until you
-   download it again. The scripts delete these too (default), unless you pass
-   `--disable-preloads`.
+   download it again. The scripts remove these completely (APK **and** app data) by
+   default, unless you pass `--disable-preloads`.
 
 Real examples from a Galaxy Tab S10 FE+ (Android 16):
 
 | Package | APK location | Default | With `--disable-preloads` |
 |---|---|---|---|
-| `com.microsoft.office.word` | `/data/app/~~duG82SZdq1_3U6G_f7mn7w==/.../base.apk` | deleted | disabled |
-| `com.microsoft.office.excel` | `/data/app/~~VyE9HeGSP9YgrE7L-9ZRiA==/.../base.apk` | deleted | disabled |
-| `com.microsoft.teams` | `/data/app/~~ZvIH_3AsYNshnhSQ2fSLvg==/.../base.apk` | deleted | disabled |
-| `com.samsung.android.app.notes` | `/data/app/~~YGHjeOYI23jGAPqDKhLaAA==/.../base.apk` | deleted | disabled |
-| `com.samsung.android.app.reminder` | `/data/app/~~ZSRowudJRoapTgWUpt2gDw==/.../base.apk` | deleted | disabled |
-| `com.sec.android.app.sbrowser` | `/data/app/~~TlWrT3SXNB-W8ZzlGzgnuA==/.../base.apk` | deleted | disabled |
-| `com.gameloft.android.ANMP.GloftA9HM` | `/data/app/...` (Asphalt 9 demo) | deleted | disabled |
-| `com.samsung.SMT.lang_en_gb_l02` | `/data/app/...` (TTS voice) | deleted | disabled |
+| `com.microsoft.office.word` | `/data/app/~~duG82SZdq1_3U6G_f7mn7w==/.../base.apk` | APK + data deleted | disabled |
+| `com.microsoft.office.excel` | `/data/app/~~VyE9HeGSP9YgrE7L-9ZRiA==/.../base.apk` | APK + data deleted | disabled |
+| `com.microsoft.teams` | `/data/app/~~ZvIH_3AsYNshnhSQ2fSLvg==/.../base.apk` | APK + data deleted | disabled |
+| `com.samsung.android.app.notes` | `/data/app/~~YGHjeOYI23jGAPqDKhLaAA==/.../base.apk` | APK + data deleted | disabled |
+| `com.samsung.android.app.reminder` | `/data/app/~~ZSRowudJRoapTgWUpt2gDw==/.../base.apk` | APK + data deleted | disabled |
+| `com.sec.android.app.sbrowser` | `/data/app/~~TlWrT3SXNB-W8ZzlGzgnuA==/.../base.apk` | APK + data deleted | disabled |
+| `com.gameloft.android.ANMP.GloftA9HM` | `/data/app/...` (Asphalt 9 demo) | APK + data deleted | disabled |
+| `com.samsung.SMT.lang_en_gb_l02` | `/data/app/...` (TTS voice) | APK + data deleted | disabled |
 
 A system app that has been **updated from the store** also shows a `/data/app` path,
 but it is still restorable because the original APK is in the system image:

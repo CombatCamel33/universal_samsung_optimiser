@@ -12,7 +12,7 @@
 #>
 
 $ErrorActionPreference = 'Continue'
-$Version = '1.1.0'
+$Version = '1.2.0'
 $Root    = Split-Path -Parent $PSScriptRoot
 $Profiles = Join-Path $Root 'profiles'
 $Backups  = Join-Path $Root 'backups'
@@ -102,6 +102,15 @@ function Find-Adb {
   return $false
 }
 
+function Format-OneUi {
+  param([string]$Value)
+  if ($Value -match '^\d{3,}$') {
+    $minor = [int]$Value.Substring(1, 2)
+    return "$($Value.Substring(0,1)).$minor"
+  }
+  return $Value
+}
+
 function Invoke-Adb {
   param([string[]]$Arguments, [switch]$Quiet)
   $a = @()
@@ -140,7 +149,7 @@ function Get-Device {
   $script:Model   = Invoke-Shell 'getprop ro.product.model'
   $script:Device  = Invoke-Shell 'getprop ro.product.device'
   $script:Release = Invoke-Shell 'getprop ro.build.version.release'
-  $oneui          = Invoke-Shell 'getprop ro.build.version.oneui'
+  $oneui          = Format-OneUi (Invoke-Shell 'getprop ro.build.version.oneui')
   $suffix = if ($oneui) { " / One UI $oneui" } else { '' }
   Info "Device: $($script:Model) ($($script:Device)) - Android $($script:Release)$suffix"
 }
@@ -277,17 +286,24 @@ function Invoke-ApplyPackage {
     if (-not $isSystem -and $script:DisablePreloads) {
       Write-Host ("    {0,-48} {1} (preload: would disable)" -f $Package, $Category) -ForegroundColor DarkGray
     } elseif (-not $isSystem) {
-      Write-Host ("    {0,-48} {1} (preload: would delete)" -f $Package, $Category) -ForegroundColor DarkGray
+      Write-Host ("    {0,-48} {1} (preload: would delete APK + data)" -f $Package, $Category) -ForegroundColor DarkGray
     } else {
       Write-Host ("    {0,-48} {1}" -f $Package, $Category) -ForegroundColor DarkGray
     }
     return 0
   }
 
-  # Data-installed preloads are deleted like everything else. Pass
-  # -DisablePreloads to hide them instead and keep them restorable.
-  if (-not $script:DisablePreloads -or (Test-SystemPackage -User $User -Package $Package)) {
-    $out = Invoke-Shell "pm uninstall -k --user $User '$Package'"
+  # System-image apps keep their data (-k) so a restore is lossless.
+  # Data-installed preloads are removed completely - APK *and* data - because
+  # their data would just be orphaned once the APK is gone.
+  # Pass -DisablePreloads to hide them instead.
+  $isSystemPkg = Test-SystemPackage -User $User -Package $Package
+  if (-not $script:DisablePreloads -or $isSystemPkg) {
+    if ($isSystemPkg) {
+      $out = Invoke-Shell "pm uninstall -k --user $User '$Package'"
+    } else {
+      $out = Invoke-Shell "pm uninstall --user $User '$Package'"
+    }
     if ($out -match 'Success') {
       Add-Content -LiteralPath $script:Manifest -Value ("{0}`t{1}`tuninstalled`t{2}" -f $User, $Package, $Category) -Encoding ASCII
       Add-Content -LiteralPath (Join-Path $Backups 'applied.tsv') -Value ("{0}`t{1}`tuninstalled`t{2}" -f $User, $Package, $Category) -Encoding ASCII
@@ -376,7 +392,7 @@ function Show-Report {
   Say "  Model      : $(Invoke-Shell 'getprop ro.product.model')"
   Say "  Product    : $(Invoke-Shell 'getprop ro.product.name')"
   Say "  Android    : $(Invoke-Shell 'getprop ro.build.version.release') (SDK $(Invoke-Shell 'getprop ro.build.version.sdk'))"
-  Say "  One UI     : $(Invoke-Shell 'getprop ro.build.version.oneui')"
+  Say "  One UI     : $(Format-OneUi (Invoke-Shell 'getprop ro.build.version.oneui'))"
   Say "  Build      : $(Invoke-Shell 'getprop ro.build.display.id')"
   Say "  CSC        : $(Invoke-Shell 'getprop ro.csc.sales_code')"
 

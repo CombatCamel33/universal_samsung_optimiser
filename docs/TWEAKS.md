@@ -12,10 +12,10 @@ Packages that live in the read-only system image are removed per user profile wi
 
 A handful of preloads are installed into `/data` instead of the system image
 (Microsoft Office, Samsung Notes, Samsung Internet, the Asphalt demo...). Those are
-deleted like everything else (`pm uninstall -k`, data kept), but because the APK is not
-in the system image they cannot be restored with `pm install-existing` - they have to be
-downloaded again from the store. Pass `--disable-preloads` to hide them instead and keep
-them restorable with `pm enable`.
+removed completely - `pm uninstall` deletes the APK and the app data, since the data
+would be orphaned otherwise. Because the APK is not in the system image they cannot be
+restored with `pm install-existing` - they have to be downloaded again from the store.
+Pass `--disable-preloads` to hide them instead and keep them restorable with `pm enable`.
 
 Nothing here needs root.
 

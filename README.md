@@ -16,7 +16,7 @@ Removes background bloat, kills Samsung's sluggish animation scaling and tunes t
 | | |
 |---|---|
 | Device | Samsung Galaxy Tab S10 FE+ Wi-Fi (`SM-X620` / `gts10fepwifi`) |
-| OS | Android 16, One UI 8.0 |
+| OS | Android 16, One UI 8.5 |
 | Build | `X620XXSBCZI2` (CSC `XSG`) |
 | RAM | 8 GB |
 | Display | 1800 × 2880, 90 Hz |
@@ -111,9 +111,10 @@ Full per-package explanation: **[docs/TWEAKS.md](docs/TWEAKS.md)**.
 Nothing is deleted. Packages are removed **per user profile** with `pm uninstall -k --user N`, which keeps all app data, and every action is written to `backups/` before it happens.
 
 Data-installed preloads (Microsoft Office, Samsung Notes, Samsung Internet, the Asphalt
-demo...) are deleted too: `pm uninstall -k` removes the APK and keeps the app data.
-Because their APK is not in the read-only system image they cannot be restored with
-`pm install-existing` - they have to be downloaded again from the store.
+demo...) are removed completely: `pm uninstall` deletes the APK **and** their app data,
+since that data would just be orphaned once the APK is gone. Because their APK is not in
+the read-only system image they cannot be restored with `pm install-existing` - they
+have to be downloaded again from the store.
 
 If you want to keep that option, add `--disable-preloads`: those apps are then hidden
 and stopped but stay on disk, and `pm enable` brings them back instantly.
@@ -165,7 +166,9 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 ## Safety
 
 - **No root.** Everything uses the normal ADB shell API.
-- **Never deletes app data.** `-k` keeps app data for every uninstall, preloads included.
+- **Keeps app data for system apps.** Every system-image app is removed with `-k`, so its
+  data survives and a restore is lossless. Only `/data`-installed preloads lose their data,
+  because the APK is deleted anyway.
 - **Protected-package blocklist** in both scripts refuses to touch `systemui`, `settings`, `gms`, `vending`, the launcher, the keyboard, permission controllers, etc.
 - **Idempotent.** Running a profile twice does nothing the second time.
 - **No OTA or Knox changes** unless you pass `--extras`.

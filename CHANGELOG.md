@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- **Preloads now lose their app data too.** `/data`-installed preloads are removed with
+  `pm uninstall` (no `-k`), so the APK *and* its data are gone. System-image apps still
+  use `-k`, so a restore stays lossless.
+- `--dry-run` marks those rows as `(preload: would delete APK + data)`.
+- Report and banner now print the One UI version in human form (`80500` -> `8.5`).
+- Docs corrected to One UI 8.5 (the test tablet runs Android 16 / One UI 8.5).
+
 ## 1.1.0
 
 - **Data-installed preloads are now deleted by default** (Office, Samsung Notes,

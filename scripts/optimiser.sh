@@ -12,7 +12,7 @@
 #
 set -u
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILES="$ROOT/profiles"
 BACKUPS="$ROOT/backups"
@@ -107,6 +107,18 @@ find_adb() {
   return 1
 }
 
+oneui_version() { # 80500 -> 8.5, 60100 -> 6.1, 70000 -> 7.0
+  local v="$1"
+  case "$v" in
+    ''|*[!0-9]*) printf '%s' "$v"; return ;;
+  esac
+  if [ "${#v}" -ge 3 ]; then
+    printf '%s.%d' "$(printf '%s' "$v" | cut -c1)" "$(printf '%s' "$v" | cut -c2-3 | sed 's/^0*//; s/^$/0/')"
+  else
+    printf '%s' "$v"
+  fi
+}
+
 adbs() { # adbs <shell args...>  -> runs adb shell, strips CR
   if [ -n "$SERIAL" ]; then
     "$ADB" -s "$SERIAL" shell "$@" </dev/null 2>/dev/null | tr -d '\r'
@@ -140,7 +152,7 @@ require_device() {
   MODEL="$(adbs getprop ro.product.model)"
   DEVICE="$(adbs getprop ro.product.device)"
   RELEASE="$(adbs getprop ro.build.version.release)"
-  ONUI="$(adbs getprop ro.build.version.oneui)"
+  ONUI="$(oneui_version "$(adbs getprop ro.build.version.oneui)")"
   [ -n "$ONUI" ] && ONUI=" / One UI $ONUI"
   info "Device: ${C_BOLD}${MODEL}${C_RESET} (${DEVICE}) - Android ${RELEASE}${ONUI}"
 }
@@ -250,19 +262,23 @@ apply_pkg() { # apply_pkg <user> <package> <category>
     if [ "$DISABLE_PRELOADS" -eq 1 ] && ! pkg_is_system "$u" "$pkg"; then
       printf '    %s%-46s%s %s (preload: would disable)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
     elif ! pkg_is_system "$u" "$pkg"; then
-      printf '    %s%-46s%s %s (preload: would delete)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
+      printf '    %s%-46s%s %s (preload: would delete APK + data)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
     else
       printf '    %s%-46s%s %s\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
     fi
     return 0
   fi
 
+  # System-image apps keep their data (-k) so a restore is lossless.
   # Data-installed preloads (Office, Samsung Notes, Samsung Internet, ...) are
-  # deleted like everything else: "pm uninstall -k --user N" removes the APK and
-  # keeps app data. Use --disable-preloads to hide them instead, which stays
-  # restorable even after the APK is gone.
+  # removed completely - APK *and* app data - because their data would just be
+  # orphaned once the APK is gone. Use --disable-preloads to hide them instead.
   if [ "$DISABLE_PRELOADS" -eq 0 ] || pkg_is_system "$u" "$pkg"; then
-    out="$(adbs "pm uninstall -k --user $u '$pkg'")"
+    if pkg_is_system "$u" "$pkg"; then
+      out="$(adbs "pm uninstall -k --user $u '$pkg'")"
+    else
+      out="$(adbs "pm uninstall --user $u '$pkg'")"
+    fi
     case "$out" in
       *Success*)
         printf '%s\t%s\t%s\t%s\n' "$u" "$pkg" "uninstalled" "$cat" >> "$MANIFEST"
@@ -324,7 +340,7 @@ do_report() {
   say "  Model      : $(adbs getprop ro.product.model)"
   say "  Product    : $(adbs getprop ro.product.name)"
   say "  Android    : $(adbs getprop ro.build.version.release) (SDK $(adbs getprop ro.build.version.sdk))"
-  say "  One UI     : $(adbs getprop ro.build.version.oneui)"
+  say "  One UI     : $(oneui_version "$(adbs getprop ro.build.version.oneui)")"
   say "  Build      : $(adbs getprop ro.build.display.id)"
   say "  CSC        : $(adbs getprop ro.csc.sales_code) / $(adbs getprop ro.csc.countryiso_code)"
   say "  ABI        : $(adbs getprop ro.product.cpu.abi)"

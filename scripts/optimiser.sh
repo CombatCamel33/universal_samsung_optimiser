@@ -12,7 +12,7 @@
 #
 set -u
 
-VERSION="1.2.0"
+VERSION="1.2.4"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILES="$ROOT/profiles"
 BACKUPS="$ROOT/backups"

@@ -12,7 +12,7 @@
 #>
 
 $ErrorActionPreference = 'Continue'
-$Version = '1.2.0'
+$Version = '1.2.4'
 $Root    = Split-Path -Parent $PSScriptRoot
 $Profiles = Join-Path $Root 'profiles'
 $Backups  = Join-Path $Root 'backups'

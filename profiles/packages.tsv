@@ -1,0 +1,204 @@
+# tier	package	category	what it is / why it can go
+# ---------------------------------------------------------------------------------------------------
+# tier 1 = light      (zero-risk: telemetry, diagnostics, AR toys, preloads)
+# tier 2 = balanced   (adds unused features: Bixby, Samsung extras, gaming services, TTS languages)
+# tier 3 = aggressive (adds full app removal: browsers, Office, YouTube, Samsung account services)
+#
+# Tabs separate the four columns. Lines starting with # are ignored.
+# Restore is always possible: pm install-existing --user <id> <package>
+
+# ---------------------------------------------------------------- TIER 1: telemetry & diagnostics
+1	com.samsung.android.rubin.app	Samsung	Customization Service - usage analytics, ad personalisation, "recommended content"
+1	com.sec.android.diagmonagent	Samsung	Diagnostics/telemetry agent that phones home with device health data
+1	com.samsung.android.dqagent	Samsung	Second Samsung telemetry agent (DQ = data quality), runs at boot
+1	com.samsung.android.knox.analytics.uploader	Samsung	Uploads Knox analytics events
+1	com.samsung.android.sdm.config	Samsung	Silently downloads carrier/service configuration bundles
+1	com.samsung.android.svcagent	Samsung	Remote-support agent for Samsung service centres
+1	com.google.android.feedback	Google	Google feedback / crash-reporting uploader
+1	com.google.mainline.telemetry	Google	Mainline (system module) telemetry uploader
+1	com.google.android.gms.location.history	Google	Location History background service
+1	com.google.android.partnersetup	Google	Installs preload/partner apps on first boot and after updates
+1	com.google.android.printservice.recommendation	Google	Suggests printer plugins you never asked for
+1	com.google.android.apps.carrier.carrierwifi	Google	Carrier Wi-Fi auto-connect (meaningless on a Wi-Fi-only tablet)
+1	com.samsung.android.bbc.bbcagent	Samsung	Background big-data collector (battery/app usage analytics)
+
+# ---------------------------------------------------------------- TIER 1: AR / emoji toys
+1	com.samsung.android.aremoji	Samsung	AR Emoji sticker engine
+1	com.samsung.android.aremojieditor	Samsung	AR Emoji editor
+1	com.samsung.android.app.dofviewer	Samsung	AR Doodle viewer
+1	com.samsung.android.app.camera.sticker.facearavatar.preload	Samsung	Preloaded camera AR-sticker pack
+1	com.sec.android.mimage.avatarstickers	Samsung	Avatar sticker pack
+1	com.samsung.android.stickercenter	Samsung	Sticker store for camera/gallery
+
+# ---------------------------------------------------------------- TIER 1: preloads & junk
+1	com.gameloft.android.ANMP.GloftA9HM	Gaming	Preloaded Asphalt 9 demo (installs itself again after factory reset)
+1	com.hiya.star	Carrier	Hiya caller-ID / spam service (no SIM in this tablet)
+1	com.android.egg	AOSP	Android Easter-egg app
+1	com.sec.android.app.hwmoduletest	Factory	Hidden hardware test app used by service centres
+1	com.sec.android.app.servicemodeapp	Factory	Hidden service-mode / diagnostics menu
+1	com.sec.factory.camera	Factory	Factory camera test harness
+1	com.sec.android.app.wlantest	Factory	Wi-Fi factory test tool
+1	com.android.devicediagnostics	AOSP	"Device diagnostics" hidden test UI
+1	com.android.traceur	AOSP	System tracing developer tool
+1	com.android.cts.ctsshim	AOSP	CTS test shim, only used by certification test suites
+1	com.android.cts.priv.ctsshim	AOSP	Privileged CTS test shim, only used by certification test suites
+
+# ---------------------------------------------------------------- TIER 2: Bixby & "smart" extras
+2	com.samsung.android.bixby.agent	Samsung	Bixby voice assistant
+2	com.samsung.android.bixby.wakeup	Samsung	Always-listening "Hi Bixby" wake word service
+2	com.samsung.android.bixbyvision.framework	Samsung	Bixby Vision framework
+2	com.samsung.android.visionintelligence	Samsung	Bixby Vision / on-device image recognition engine
+2	com.samsung.android.app.vex.scanner	Samsung	Bixby Vision scanner UI
+2	com.samsung.android.service.airviewdictionary	Samsung	Bixby Vision dictionary lookup
+2	com.samsung.android.scs	Samsung	Samsung Context Service - feeds Bixby/ST with usage context
+2	com.samsung.android.mapsagent	Samsung	Bixby/Places map agent
+2	com.samsung.android.smartsuggestions	Samsung	Smart suggestions on the home screen
+2	com.samsung.android.app.routines	Samsung	Modes & Routines automation engine
+2	com.samsung.android.forest	Samsung	Digital Wellbeing (app timers, screen-time tracking)
+2	com.samsung.android.app.parentalcare	Samsung	Parental-care helper service
+2	com.samsung.android.appseparation	Samsung	App-separation service used by Dual Messenger / app cloning
+2	com.samsung.android.messageguardsync	Samsung	Message-guard sync (telephony companion service)
+
+# ---------------------------------------------------------------- TIER 2: Samsung services you likely don't need
+2	com.samsung.android.sm.devicesecurity	Samsung	McAfee-powered "Device security" scanner (~250 MB RAM while running)
+2	com.samsung.android.kgclient	Samsung	Knox Guard client (carrier/enterprise device locking)
+2	com.samsung.android.mdm	Samsung	Samsung MDM agent for enterprise management
+2	com.samsung.android.da.daagent	Samsung	Device-admin agent used by Knox/MDM
+2	com.sec.enterprise.knox.cloudmdm.smdms	Samsung	Knox cloud MDM enrolment service
+2	com.skms.android.agent	Samsung	Knox MDM agent stub
+2	com.samsung.android.cidmanager	Samsung	Carrier-ID manager (rewrites CSC settings on SIM events)
+2	com.samsung.android.app.omcagent	Samsung	OMC/CSC agent - only needed during first-time carrier setup
+2	com.samsung.android.scpm	Samsung	Samsung Configuration & Policy Manager (carrier policy pulls)
+2	com.samsung.android.shortcutbackupservice	Samsung	Backs up home-screen shortcuts to Samsung Cloud
+2	com.samsung.android.brightnessbackupservice	Samsung	Persists auto-brightness learning data
+2	com.samsung.android.privacydashboard	Samsung	Privacy dashboard UI (the permission-usage screen)
+2	com.samsung.android.app.sharelive	Samsung	Private Share (blockchain file sharing)
+2	com.samsung.android.themecenter	Samsung	Galaxy Themes store
+2	com.samsung.android.wallpaper.live	Samsung	Live wallpaper engine
+2	com.samsung.android.dynamiclock	Samsung	Dynamic Lock Screen wallpaper rotation
+2	com.samsung.android.widget.pictureframe	Samsung	Picture-frame widget
+2	com.samsung.android.app.clipboardedge	Samsung	Edge panel: clipboard
+2	com.samsung.android.app.taskedge	Samsung	Edge panel: tasks
+2	com.samsung.android.service.peoplestripe	Samsung	Edge panel: people
+2	com.samsung.android.app.watchmanagerstub	Samsung	Galaxy Wearable stub that nags you to install the watch app
+2	com.samsung.android.beaconmanager	Samsung	SmartThings beacon scanner
+2	com.samsung.android.aware.service	Samsung	Nearby-device awareness service for SmartThings
+2	com.samsung.android.easysetup	Samsung	Easy Setup / Quick Share handshake service
+2	com.samsung.android.net.wifi.wifiguider	Samsung	Wi-Fi "guider" - public Wi-Fi suggestions and captive-portal ads
+2	com.samsung.android.app.updatecenter	Samsung	Galaxy Store app-update checker (system updates still work)
+2	com.samsung.android.smartswitchassistant	Samsung	Smart Switch helper service
+2	com.sec.android.easyMover	Samsung	Smart Switch (phone-to-tablet migration wizard)
+2	com.sec.android.easyMover.Agent	Samsung	Smart Switch background agent
+2	com.samsung.SMT.lang_de_de_f00	Samsung	TTS language pack: German
+2	com.samsung.SMT.lang_en_gb_f00	Samsung	TTS language pack: English (UK) - duplicate voice
+2	com.samsung.SMT.lang_en_gb_l02	Samsung	TTS language pack: English (UK) - duplicate voice
+2	com.samsung.SMT.lang_en_us_l03	Samsung	TTS language pack: English (US) - duplicate voice
+2	com.samsung.SMT.lang_es_es_f00	Samsung	TTS language pack: Spanish (Spain)
+2	com.samsung.SMT.lang_es_mx_f00	Samsung	TTS language pack: Spanish (Mexico)
+2	com.samsung.SMT.lang_es_us_f00	Samsung	TTS language pack: Spanish (US)
+2	com.samsung.SMT.lang_fr_fr_f00	Samsung	TTS language pack: French
+2	com.samsung.SMT.lang_hi_in_f00	Samsung	TTS language pack: Hindi
+2	com.samsung.SMT.lang_it_it_f00	Samsung	TTS language pack: Italian
+2	com.samsung.SMT.lang_pl_pl_f00	Samsung	TTS language pack: Polish
+2	com.samsung.SMT.lang_pt_br_f00	Samsung	TTS language pack: Portuguese (Brazil)
+2	com.samsung.SMT.lang_ru_ru_f00	Samsung	TTS language pack: Russian
+2	com.samsung.SMT.lang_th_th_f00	Samsung	TTS language pack: Thai
+2	com.samsung.SMT.lang_vi_vn_f00	Samsung	TTS language pack: Vietnamese
+2	com.samsung.SMT.lang_zh_cn_l02	Samsung	TTS language pack: Chinese (Simplified)
+2	com.samsung.SMT.lang_zh_hk_f00	Samsung	TTS language pack: Chinese (Hong Kong)
+2	com.samsung.SMT.lang_zh_tw_f00	Samsung	TTS language pack: Chinese (Traditional)
+2	com.google.ar.core	Google	ARCore runtime - only needed by AR apps/games
+2	com.google.android.federatedcompute	Google	Federated-learning job scheduler
+2	com.google.android.ondevicepersonalization.services	Google	On-device ad/personalisation service
+2	com.google.android.apps.restore	Google	Restore-from-backup helper used during setup
+2	com.google.android.gms.supervision	Google	Family Link supervision service
+2	com.google.android.healthconnect.controller	Google	Health Connect settings UI
+2	com.google.android.health.connect.backuprestore	Google	Health Connect cloud backup
+2	com.microsoft.appmanager	Microsoft	"Link to Windows" bridge (useless with a Mac/Linux desktop)
+2	com.android.dreams.basic	AOSP	Basic screensaver
+2	com.android.dreams.phototable	AOSP	Photo-table screensaver
+2	com.android.wallpaper.livepicker	AOSP	Live-wallpaper picker
+2	com.android.bookmarkprovider	AOSP	Legacy browser bookmark provider
+2	com.android.providers.partnerbookmarks	AOSP	Preloaded partner bookmarks
+2	com.android.carrierdefaultapp	AOSP	Carrier redirect app for data-cap errors
+2	com.android.hotspot2.osulogin	AOSP	Hotspot 2.0 online sign-up
+2	com.android.bluetoothmidiservice	AOSP	Bluetooth MIDI service
+2	com.google.android.apps.turbo	Google	Device Health Services - battery/device-health predictions
+
+# ---------------------------------------------------------------- TIER 2: gaming services
+2	com.samsung.android.game.gos	Samsung	Game Optimizing Service - throttles CPU/GPU while gaming
+2	com.samsung.android.game.gametools	Samsung	Game Launcher / in-game overlay tools
+2	com.samsung.gpuwatchapp	Samsung	GPU watchdog used by Game Launcher
+
+# ---------------------------------------------------------------- TIER 3: user-facing apps you can replace
+3	com.sec.android.app.sbrowser	Samsung	Samsung Internet browser (Brave is installed)
+3	com.android.chrome	Google	Chrome (Brave is installed)
+3	com.sec.android.app.chromecustomizations	Google	Chrome-only customisation overlay (useless once Chrome is gone)
+3	com.google.android.youtube	Google	YouTube app (ReVanced/Morphe YouTube is installed instead)
+3	com.google.android.apps.photos	Google	Google Photos
+3	com.google.android.gm	Google	Gmail
+3	com.google.android.apps.maps	Google	Google Maps
+3	com.google.android.apps.messaging	Google	Google Messages (no SIM in this tablet)
+3	com.google.android.apps.tachyon	Google	Google Meet (Zoom/Teams are installed)
+3	com.google.android.apps.bard	Google	Google Gemini
+3	com.google.android.googlequicksearchbox	Google	Google app / Discover feed / "Hey Google" (~330 MB RAM while running)
+3	com.google.android.apps.accessibility.voiceaccess	Google	Voice Access accessibility service (only if you don't use voice control)
+3	com.android.bips	AOSP	Built-in print service
+3	com.microsoft.office.outlook	Microsoft	Outlook
+3	com.microsoft.office.word	Microsoft	Word
+3	com.microsoft.office.excel	Microsoft	Excel
+3	com.microsoft.office.powerpoint	Microsoft	PowerPoint
+3	com.microsoft.office.onenote	Microsoft	OneNote
+3	com.microsoft.skydrive	Microsoft	OneDrive
+3	com.microsoft.teams	Microsoft	Microsoft Teams
+3	com.samsung.android.app.reminder	Samsung	Samsung Reminder
+3	com.samsung.android.app.notes	Samsung	Samsung Notes (remove only if you don't use it - it is your heaviest app)
+3	com.samsung.android.lool	Samsung	Device Care (battery/storage/security dashboard)
+3	com.samsung.android.kidsinstaller	Samsung	Samsung Kids
+3	com.samsung.android.scloud	Samsung	Samsung Cloud sync/backup
+3	com.samsung.android.mobileservice	Samsung	Samsung account social/backup plumbing
+3	com.samsung.android.samsungpass	Samsung	Samsung Pass password vault
+3	com.samsung.android.samsungpassautofill	Samsung	Samsung Pass autofill
+3	com.samsung.android.authfw	Samsung	Samsung Pass authentication framework
+3	com.sec.android.app.samsungapps	Samsung	Galaxy Store
+3	com.samsung.android.photoremasterservice	Samsung	Galaxy Enhance-X AI photo remaster engine
+3	com.samsung.android.visual.cloudcore	Samsung	Cloud AI vision backend
+3	com.samsung.android.homemode	Samsung	SmartThings Home Mode automation
+3	com.samsung.android.service.stplatform	Samsung	SmartThings platform service
+3	com.samsung.android.service.tagservice	Samsung	SmartThings tag/location service
+3	com.samsung.android.app.find	Samsung	SmartThings Find (device tracker)
+3	com.samsung.android.fmm	Samsung	Find My Mobile
+3	com.samsung.android.smartface	Samsung	Face-unlock engine
+3	com.samsung.android.smartface.overlay	Samsung	Face-unlock overlay resources
+
+# ---------------------------------------------------------------- TIER 3: casting / continuity / second screen
+3	com.samsung.android.smartmirroring	Samsung	Smart View screen mirroring (Miracast)
+3	com.samsung.android.audiomirroring	Samsung	Audio mirroring to TVs
+3	com.samsung.android.allshare.service.mediashare	Samsung	DLNA media sharing service
+3	com.samsung.android.inputshare	Samsung	Input sharing to other Galaxy devices
+3	com.samsung.android.secondconnection	Samsung	Second-connection service (tablet <-> phone bridge)
+3	com.samsung.android.secondscreen	Samsung	Use tablet as a second screen
+3	com.samsung.android.hwresourceshare	Samsung	Hardware resource sharing (keyboard/mouse share)
+3	com.samsung.android.hwresourceshare.storage	Samsung	Hardware resource sharing - storage
+3	com.samsung.android.mdx	Samsung	Samsung DeX / Multi Device Experience
+3	com.samsung.android.mdx.kit	Samsung	MDX SDK runtime
+3	com.samsung.android.mcfds	Samsung	Multi Control file drop service
+3	com.samsung.android.mcfserver	Samsung	Multi Control server
+3	com.samsung.android.mcf.autohotspot	Samsung	Multi Control auto-hotspot
+
+# ---------------------------------------------------------------- TIER 3: telephony stack (Wi-Fi-only tablet)
+3	com.samsung.android.dialer	Samsung	Phone dialer
+3	com.samsung.android.incallui	Samsung	In-call UI
+3	com.samsung.android.app.telephonyui	Samsung	Telephony settings UI fragments
+3	com.samsung.android.callassistant	Samsung	Call assistant / spam screening
+3	com.samsung.android.callbgprovider	Samsung	Call background provider
+3	com.samsung.android.smartcallprovider	Samsung	Smart Call (caller ID database)
+3	com.samsung.android.emergency	Samsung	Emergency SOS / medical info service
+3	com.sec.android.emergencylauncher	Samsung	Emergency launcher
+3	com.samsung.android.vtcamerasettings	Samsung	Video-call camera settings (IMS)
+3	com.sec.imslogger	Samsung	IMS logging service
+3	com.sec.sve	Samsung	Samsung VoLTE engine
+3	com.samsung.android.mdecservice	Samsung	MDE (mobile device experience) call continuity
+3	com.android.calllogbackup	AOSP	Call-log backup provider
+3	com.android.mms.service	AOSP	MMS service
+3	com.android.simappdialog	AOSP	SIM application dialog

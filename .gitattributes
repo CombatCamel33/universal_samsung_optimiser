@@ -1,0 +1,10 @@
+# keep everything LF so the bash script works everywhere
+* text=auto eol=lf
+
+*.sh    text eol=lf
+*.ps1   text eol=lf
+*.tsv   text eol=lf
+*.md    text eol=lf
+
+# binaries
+*.png   binary

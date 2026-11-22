@@ -1,0 +1,19 @@
+# runtime output - keep the folder, ignore the contents
+backups/*
+!backups/.gitkeep
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# editors
+.vscode/
+.idea/
+*.swp
+
+# python
+__pycache__/
+*.pyc

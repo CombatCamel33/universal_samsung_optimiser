@@ -1,0 +1,26 @@
+# EXTRA package list - only applied when you explicitly pass --extras
+# ---------------------------------------------------------------------------------------------------
+# These are NOT part of light / balanced / aggressive because they break things people
+# often rely on: OTA security updates, the Samsung account, and Secure Folder / Knox.
+# This tablet has an active Secure Folder (user 150), so Knox is kept by default.
+#
+# Same columns as packages.tsv: tier package category note
+# The tier column is ignored for this file.
+
+extras	com.samsung.knox.securefolder	Knox	Secure Folder app itself
+extras	com.samsung.android.knox.containercore	Knox	Knox container engine - Secure Folder and Work Profile depend on it
+extras	com.samsung.android.container	Knox	Knox container support
+extras	com.samsung.android.knox.sandbox	Knox	Knox sandbox runtime
+extras	com.samsung.android.knox.er	Knox	Knox enterprise repository
+extras	com.samsung.android.knox.kfbp	Knox	Knox file-based protection
+extras	com.samsung.android.knox.knnr	Knox	Knox network name resolution
+extras	com.samsung.android.knox.kpecore	Knox	Knox policy engine core
+extras	com.samsung.android.knox.pushmanager	Knox	Knox push notifications
+extras	com.samsung.android.knox.zt.framework	Knox	Knox Zero Trust framework
+extras	com.samsung.android.knox.app.networkfilter	Knox	Knox per-app network filter
+extras	com.samsung.android.knox.attestation	Knox	Knox hardware attestation
+extras	com.knox.vpn.proxyhandler	Knox	Knox VPN proxy handler
+extras	com.samsung.android.rampart	Knox	Auto Blocker (side-loading protection)
+extras	com.sec.android.soagent	Samsung	Software update agent - removing this stops OTA security updates
+extras	com.wssyncmldm	Samsung	Software update download manager - removing this stops OTA updates
+extras	com.osp.app.signin	Samsung	Samsung account sign-in - breaks Galaxy Store, Find My Mobile, Secure Folder

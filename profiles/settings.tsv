@@ -1,0 +1,21 @@
+# tier	namespace	key	value	note
+# ---------------------------------------------------------------------------------------------------
+# Applied with:  settings put <namespace> <key> <value>
+# Restored from the backup that is written before anything is changed.
+# Use the literal __DELETE__ as a value to remove a setting instead of writing one.
+
+# ---------------------------------------------------------------- TIER 1: instant responsiveness
+1	global	window_animation_scale	0.5	Halve window-open animation duration (was 1.5x on this tablet)
+1	global	transition_animation_scale	0.5	Halve transition animation duration
+1	global	animator_duration_scale	0.5	Halve animator duration - the single biggest "feels faster" win
+1	global	cached_apps_freezer	enabled	Freeze cached background apps instead of keeping them in RAM
+1	system	peak_refresh_rate	90	Never cap the 90 Hz panel
+
+# ---------------------------------------------------------------- TIER 2: performance & battery
+2	global	sem_enhanced_cpu_responsiveness	1	Samsung "Processing speed: High" - keeps the CPU scheduler in performance mode
+2	global	wifi_scan_always_enabled	0	Stop background Wi-Fi scanning when Wi-Fi is off (battery + fewer wakeups)
+2	global	ble_scan_always_enabled	0	Stop background Bluetooth LE scanning when Bluetooth is off
+2	system	min_refresh_rate	60	Never drop below 60 Hz, so scrolling stays smooth (no 30 Hz idle steps)
+
+# ---------------------------------------------------------------- TIER 3: maximum smoothness
+3	system	min_refresh_rate	90	Lock the panel at 90 Hz at all times - smoothest, costs some battery

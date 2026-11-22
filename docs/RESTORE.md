@@ -157,6 +157,20 @@ adb shell pm enable --user 10 com.microsoft.office.word
 `--restore` handles both cases automatically (`install-existing` for uninstalled
 packages, `pm enable` for disabled ones).
 
+## One app at a time: reinstall from the store
+
+You do not need a full restore to get a single app back. Galaxy Store and Play Store stay
+installed in every profile:
+
+| App | Store |
+|---|---|
+| Samsung apps (Notes, Reminder, SmartThings, Samsung Internet, Samsung Kids) | Galaxy Store |
+| Google apps (Chrome, YouTube, Gmail, Maps, Photos, Messages, Gemini) | Play Store |
+| Microsoft apps (Word, Excel, Teams, OneDrive, Outlook) | Play Store |
+
+A store install gives you the current version and a fresh data directory - your old app
+data is only recovered by `--restore` (system apps keep it because of `-k`).
+
 ## Notes
 
 * Restoring does **not** re-download apps you uninstalled from the Play Store yourself.

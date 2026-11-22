@@ -124,6 +124,9 @@ apps, not just background services, so read this before running it.
 - No Samsung Pass autofill.
 - No dialer or Emergency SOS (the Wi-Fi-only tablet has no SIM anyway).
 
+Every app listed above can be reinstalled by hand from **Galaxy Store** or **Play Store**
+whenever you want it back - see [Reinstalling an app you actually want](#reinstalling-an-app-you-actually-want).
+
 **What keeps working**
 
 Camera, Gallery, My Files, Clock, Calculator, Contacts, Calendar, Settings, Samsung
@@ -143,6 +146,34 @@ design - reinstall those from the Play Store.
 One package is not in any profile on purpose: `com.samsung.android.fmm` (Find My Mobile).
 Samsung blocks both `pm uninstall` and `pm disable-user` on it, so it can only be removed
 with root. It is left installed and idle.
+
+## Reinstalling an app you actually want
+
+You do **not** have to restore everything to get one app back. Any removed app can be
+installed again by hand, at any time, after any profile:
+
+| App type | Where to get it |
+|---|---|
+| Samsung apps (Notes, Reminder, SmartThings, Samsung Internet, Samsung Kids...) | **Galaxy Store** - still installed, so search the app name and tap Install |
+| Google apps (Chrome, YouTube, Gmail, Maps, Photos, Messages, Gemini...) | **Play Store** - search the app name |
+| Microsoft apps (Word, Excel, PowerPoint, OneNote, Outlook, Teams, OneDrive) | **Play Store** - search the app name |
+| Everything else | Play Store, or the vendor's own site |
+
+Both stores are left installed in every profile, so this always works without ADB.
+
+Notes:
+
+- A store reinstall gives you the **latest version**, not the preloaded build. That is
+  normally what you want anyway.
+- **Samsung Notes**: if you had local notes, they were deleted with the app on
+  `aggressive` - check Samsung Cloud / Smart Switch backup before reinstalling.
+- **Samsung Internet / Samsung Pass**: reinstallable from Galaxy Store, but Samsung Pass
+  autofill only works again if `com.samsung.android.samsungpass` and
+  `com.samsung.android.authfw` are restored too (`./run.sh --restore`), because a store
+  install cannot re-register the Knox-backed system service.
+- **System apps** (Chrome, YouTube, Gmail, Maps...) are better brought back with
+  `./run.sh --restore`: it re-enables the copy already on the device, keeps your data and
+  needs no download.
 
 ## Maintenance tasks
 

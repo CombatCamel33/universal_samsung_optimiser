@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.4
+
+- README: new "Reinstalling an app you actually want" section - Galaxy Store / Play Store
+  both stay installed, so any removed app can be added back by hand after any profile.
+- `docs/RESTORE.md`: same guidance for single-app recovery, including the caveat that a
+  store install starts with fresh app data.
+
 ## 1.2.3
 
 - `aggressive` keeps **Device Care** (`com.samsung.android.lool`).

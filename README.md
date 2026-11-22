@@ -108,7 +108,9 @@ Full per-package explanation: **[docs/TWEAKS.md](docs/TWEAKS.md)**.
 
 ## Reversibility
 
-Nothing is deleted. Packages are removed **per user profile** with `pm uninstall -k --user N`, which keeps all app data, and every action is written to `backups/` before it happens.
+System apps are never deleted. They are removed **per user profile** with
+`pm uninstall -k --user N`, which keeps all app data, and every action is written to
+`backups/` before it happens.
 
 Data-installed preloads (Microsoft Office, Samsung Notes, Samsung Internet, the Asphalt
 demo...) are removed completely: `pm uninstall` deletes the APK **and** their app data,
@@ -136,7 +138,8 @@ Undo everything:
 
 On Windows: `.\run.ps1 -Restore`, `.\run.ps1 -RestoreAll`.
 
-Restoring puts the packages back exactly as they were (same user, data intact). Reboot afterwards.
+Restoring puts the system apps back exactly as they were (same user, data intact).
+Reboot afterwards.
 
 What a restore cannot bring back are **data-installed preloads** (Office, Samsung
 Notes, Samsung Internet, the Asphalt demo, some TTS voices) - their APK is not in the

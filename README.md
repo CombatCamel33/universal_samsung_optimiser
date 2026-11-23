@@ -26,7 +26,7 @@ after rebooting on the same build:
 | Available RAM | 657.0 MiB | **790.4 MiB** | **+133.4 MiB** |
 | Free `/data` storage | 5.70 GiB | **6.04 GiB** | **+355.4 MiB** |
 | Animation scales | 1.0× / 1.0× / 1.0× | **0.5× / 0.5× / 0.5×** | Halved |
-| Reduce transparency and blur | on (pre-existing) | **on (profile-enforced)** | Retained after reboot |
+| Reduce transparency and blur | off | **on (profile-enforced)** | Enabled and retained after reboot |
 
 All 44 targets were confirmed absent after reboot. Calls, Google Messages, Samsung
 Health, Health Services, Health Monitor, emergency/SOS, NFC, Play Store, Galaxy Store,

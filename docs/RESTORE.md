@@ -12,12 +12,14 @@ most thorough.
 
 That reads:
 
-* `backups/applied.tsv` - every package the tool ever removed, with the user profile it was removed from
-* `backups/original-settings.tsv` - the **original** value of every setting it touched
+* tablet: `backups/applied.tsv` and `backups/original-settings.tsv`
+* watch: `backups/watch-<model>-<hardware-id>/applied.tsv` and
+  `original-settings.tsv`
 
 and then runs `pm install-existing --user <id> <package>` for each one plus restores
-the settings. App data was never deleted (`-k`), so everything comes back logged in
-with your data intact.
+the settings. It runs `pm enable` for actions recorded as disabled. System-app data is
+kept by `-k`; `/data` apps deleted without `--disable-preloads` still need a store
+reinstall on both device families.
 
 Reboot afterwards:
 
@@ -33,7 +35,13 @@ Each run also writes its own folder:
 ls backups/
 # 20261122-102743  20261122-102828  20261122-102849
 ./run.sh --restore backups/20261122-102849
+
+# Watch histories are isolated by hardware id:
+./run.sh --restore backups/watch-SM-R930-.../20261123-120000
 ```
+
+The restore is rejected if the backup's recorded device codename or device class does
+not match the connected target.
 
 ## 3. Brute force reinstall
 
@@ -44,8 +52,9 @@ package that appears in any profile:
 ./run.sh --restore-all
 ```
 
-This also resets the animation scales to Android's defaults and removes the refresh
-rate overrides. Packages that were never installed are ignored.
+This also resets the animation scales to Android's defaults. Tablet targets additionally
+restore the tablet CPU, radio-scan and refresh-rate defaults; those commands are never
+sent to a watch. Packages that were never installed are ignored.
 
 ## Restoring a single app by hand
 
@@ -103,9 +112,9 @@ Android has two kinds of "preinstalled" app:
    `/system_ext`, `/vendor`). `pm uninstall --user 0` only marks it uninstalled for that
    user; the APK stays, so `pm install-existing` always works.
 2. **Data-installed preloads** - Samsung shipped the app, but its APK lives in
-   `/data/app`. Uninstalling the last user deletes the APK, so the app is gone until you
-   download it again. The scripts remove these completely (APK **and** app data) by
-   default, unless you pass `--disable-preloads`.
+    `/data/app`. Uninstalling the last user deletes the APK, so the app is gone until you
+   download it again. Both device profiles remove these completely (APK **and** app data)
+   by default unless you pass `--disable-preloads`.
 
 Real examples from a Galaxy Tab S10 FE+ (Android 16):
 

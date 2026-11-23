@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-#  Tab S10 FE+ Optimiser - macOS / Linux driver
+#  Universal Samsung Optimiser - macOS / Linux driver
 #  ---------------------------------------------------------------
-#  Debloats and tunes a Samsung Galaxy Tab S10 FE+ (or any modern
-#  Samsung/Android device) over ADB. Every change is reversible.
+#  Debloats and tunes supported Samsung Galaxy tablets and watches
+#  over ADB. Every change is reversible.
 #
 #  Usage:  ./run.sh [light|balanced|aggressive] [options]
 #  Help:   ./run.sh --help
@@ -12,10 +12,15 @@
 #
 set -u
 
-VERSION="1.2.5"
+VERSION="1.3.0"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILES="$ROOT/profiles"
-BACKUPS="$ROOT/backups"
+BACKUP_ROOT="$ROOT/backups"
+BACKUPS="$BACKUP_ROOT"
+PROFILE_DIR="$PROFILES"
+PACKAGES_FILE="$PROFILE_DIR/packages.tsv"
+SETTINGS_FILE="$PROFILE_DIR/settings.tsv"
+EXTRAS_FILE="$PROFILE_DIR/extras.tsv"
 ADB="${ADB:-}"
 
 # ------------------------------------------------------------------ output helpers
@@ -51,26 +56,34 @@ MODE="apply"          # apply | restore | restore-all | list | report
 RESTORE_DIR=""
 USER_LIST=""
 SERIAL=""
+DEVICE_CLASS="tablet"
+DEVICE_LABEL="Galaxy tablet / Android"
+CHARACTERISTICS=""
+HARDWARE_ID=""
+WATCH_FEATURE="false"
 
 usage() {
   cat <<EOF
-${C_BOLD}Tab S10 FE+ Optimiser${C_RESET} v$VERSION
+${C_BOLD}Universal Samsung Optimiser${C_RESET} v$VERSION
 
   ./run.sh <profile> [options]      apply a profile
   ./run.sh --restore [dir]          undo every change (or restore one backup dir)
   ./run.sh --restore-all            reinstall every package in every profile
 
 ${C_BOLD}Profiles${C_RESET}
-  light         telemetry, diagnostics, AR toys, preloads          (~35 packages)
-  balanced      + Bixby, Samsung extras, gaming services, TTS packs (~120 packages)
-  aggressive    + browsers, Office, YouTube, Samsung account apps   (~200 packages)
+  light         safest telemetry, diagnostics and factory leftovers
+  balanced      + optional Samsung/Google background features
+  aggressive    + replaceable user-facing apps
+
+  A Galaxy Watch is detected automatically and uses its own conservative,
+  device-tested package list. Run --list to see both device families.
 
 ${C_BOLD}Options${C_RESET}
   --profile <name>   same as passing the profile as the first argument
   --dry-run          show what would happen, change nothing
   --user <id>        only touch this Android user (repeatable)
   --all-users        every real user profile (default: all except Secure Folder)
-  --extras           also remove Knox / OTA / Samsung account (breaks Secure Folder)
+  --extras           device-specific high-risk removals (read --list first)
   --disable-preloads hide /data-installed preloads instead of deleting them
                      (Office, Notes, Samsung Internet... stay on disk, restorable)
   --trim             clear app caches (pm trim-caches)
@@ -79,6 +92,7 @@ ${C_BOLD}Options${C_RESET}
   --yes, -y          do not ask for confirmation
   --list             print the package lists
   --report           print device info, RAM and storage
+  --serial <id>      target a specific device when several are attached
   --help, -h         this text
   --version          print version
 
@@ -131,6 +145,29 @@ adb_raw() {
   if [ -n "$SERIAL" ]; then "$ADB" -s "$SERIAL" "$@" </dev/null; else "$ADB" "$@" </dev/null; fi
 }
 
+configure_device_profile() {
+  local safe_id
+  DEVICE_CLASS="tablet"
+  DEVICE_LABEL="Galaxy tablet / Android"
+  PROFILE_DIR="$PROFILES"
+  BACKUPS="$BACKUP_ROOT"
+
+  case ",$CHARACTERISTICS,$WATCH_FEATURE," in
+    *,watch,*|*,true,*)
+      DEVICE_CLASS="watch"
+      DEVICE_LABEL="Galaxy Watch / Wear OS"
+      PROFILE_DIR="$PROFILES/watch"
+      safe_id="$(printf '%s-%s' "$MODEL" "$HARDWARE_ID" | tr -c 'A-Za-z0-9._-' '_')"
+      [ -z "$safe_id" ] && safe_id="unknown-watch"
+      BACKUPS="$BACKUP_ROOT/watch-$safe_id"
+      ;;
+  esac
+
+  PACKAGES_FILE="$PROFILE_DIR/packages.tsv"
+  SETTINGS_FILE="$PROFILE_DIR/settings.tsv"
+  EXTRAS_FILE="$PROFILE_DIR/extras.tsv"
+}
+
 require_device() {
   find_adb || die "adb not found. Install Android platform-tools or set ADB=/path/to/adb"
   local out
@@ -152,9 +189,13 @@ require_device() {
   MODEL="$(adbs getprop ro.product.model)"
   DEVICE="$(adbs getprop ro.product.device)"
   RELEASE="$(adbs getprop ro.build.version.release)"
+  CHARACTERISTICS="$(adbs getprop ro.build.characteristics)"
+  HARDWARE_ID="$(adbs getprop ro.serialno)"
+  WATCH_FEATURE="$(adbs "pm has-feature android.hardware.type.watch")"
+  configure_device_profile
   ONUI="$(oneui_version "$(adbs getprop ro.build.version.oneui)")"
   [ -n "$ONUI" ] && ONUI=" / One UI $ONUI"
-  info "Device: ${C_BOLD}${MODEL}${C_RESET} (${DEVICE}) - Android ${RELEASE}${ONUI}"
+  info "Device: ${C_BOLD}${MODEL}${C_RESET} (${DEVICE}) - Android ${RELEASE}${ONUI} [$DEVICE_LABEL]"
 }
 
 # ------------------------------------------------------------------ users
@@ -229,6 +270,32 @@ is_protected() {
     com.android.vpndialogs|com.android.mtp|com.samsung.android.mtp)
       return 0 ;;
   esac
+  if [ "$DEVICE_CLASS" = "watch" ]; then
+    case "$1" in
+      com.samsung.android.wearable.sysui|com.google.android.apps.wearable.systemui|\
+      com.google.wear.services|com.google.android.wearable.app|\
+      com.google.android.wearable.protolayout.renderer|com.google.android.gsmediator|\
+      com.samsung.android.clientconnection|com.samsung.android.secondconnection|\
+      com.samsung.android.wcs.extension|com.samsung.android.mcfds|\
+      com.samsung.android.service.health|com.google.android.wearable.healthservices|\
+      com.samsung.android.wear.shealth|com.samsung.android.shealthmonitor|\
+      com.samsung.android.hardware.sensormanager.permission|\
+      com.samsung.android.watch.safety_assistance|com.samsung.android.watch.findmywatch|\
+      com.samsung.android.watch.stf|com.samsung.android.app.find|com.google.android.apps.adm|\
+      com.android.nfc|\
+      com.samsung.android.dialer|com.samsung.android.incallui|\
+      com.samsung.android.app.telephonyui|com.samsung.advancedcallservice|\
+      com.samsung.android.mdecservice|com.samsung.android.wear.blockednumber|\
+      com.samsung.android.providers.contacts|com.samsung.android.app.contacts|\
+      com.samsung.wear.contacts.sync|com.sec.imsservice|com.samsung.advp.imssettings|\
+      com.google.android.apps.messaging|com.samsung.android.wearable.samsungaccount|\
+      com.samsung.android.scloud|com.sec.android.app.samsungapps|\
+      com.samsung.android.wearable.setupwizard|com.samsung.android.wearable.setupwizard.fota|\
+      com.sec.android.easyMover|com.samsung.android.wear.smartswitchassistant|\
+      com.samsung.wear.watchface.runtime|com.samsung.android.watch.watchface.*)
+        return 0 ;;
+    esac
+  fi
   return 1
 }
 
@@ -241,14 +308,24 @@ pkg_is_system() { # true when the APK lives in the read-only system image
   grep -qx "package:$2" "$TMP/pkgs-sys-$1" 2>/dev/null
 }
 
+pkg_is_disabled() {
+  grep -qx "package:$2" "$TMP/pkgs-disabled-$1" 2>/dev/null
+}
+
 cache_packages() { # cache_packages <user>
   adbs "pm list packages --user $1" > "$TMP/pkgs-$1"
   adbs "pm list packages -s --user $1" > "$TMP/pkgs-sys-$1"
+  adbs "pm list packages -d --user $1" > "$TMP/pkgs-disabled-$1"
 }
 
 # ------------------------------------------------------------------ apply one package
-apply_pkg() { # apply_pkg <user> <package> <category>
-  local u="$1" pkg="$2" cat="$3" out action
+apply_pkg() { # apply_pkg <user> <package> <category> [auto|uninstall|disable]
+  local u="$1" pkg="$2" cat="$3" requested="${4:-auto}" out
+
+  case "$requested" in
+    ''|auto|uninstall|disable) ;;
+    *) fail "$pkg - invalid profile action '$requested'"; return 2 ;;
+  esac
 
   if is_protected "$pkg"; then
     fail "refusing to touch protected package: $pkg"
@@ -257,9 +334,16 @@ apply_pkg() { # apply_pkg <user> <package> <category>
   if ! pkg_installed "$u" "$pkg"; then
     return 3   # not installed for this user - nothing to do
   fi
+  if pkg_is_disabled "$u" "$pkg" && [ "$requested" != "uninstall" ]; then
+    return 3   # already in the requested disabled state
+  fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    if [ "$DISABLE_PRELOADS" -eq 1 ] && ! pkg_is_system "$u" "$pkg"; then
+    if [ "$requested" = "disable" ]; then
+      printf '    %s%-46s%s %s (would disable; APK + data kept)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
+    elif [ "$requested" = "uninstall" ] && pkg_is_system "$u" "$pkg"; then
+      printf '    %s%-46s%s %s (would uninstall for user %s; data kept)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat" "$u"
+    elif [ "$DISABLE_PRELOADS" -eq 1 ] && ! pkg_is_system "$u" "$pkg"; then
       printf '    %s%-46s%s %s (preload: would disable)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
     elif ! pkg_is_system "$u" "$pkg"; then
       printf '    %s%-46s%s %s (preload: would delete APK + data)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
@@ -273,7 +357,7 @@ apply_pkg() { # apply_pkg <user> <package> <category>
   # Data-installed preloads (Office, Samsung Notes, Samsung Internet, ...) are
   # removed completely - APK *and* app data - because their data would just be
   # orphaned once the APK is gone. Use --disable-preloads to hide them instead.
-  if [ "$DISABLE_PRELOADS" -eq 0 ] || pkg_is_system "$u" "$pkg"; then
+  if [ "$requested" != "disable" ] && { [ "$DISABLE_PRELOADS" -eq 0 ] || pkg_is_system "$u" "$pkg"; }; then
     if pkg_is_system "$u" "$pkg"; then
       out="$(adbs "pm uninstall -k --user $u '$pkg'")"
     else
@@ -338,10 +422,12 @@ restore_setting() { # restore_setting <ns> <key> <old>
 do_report() {
   head1 "Device"
   say "  Model      : $(adbs getprop ro.product.model)"
+  say "  Target     : $DEVICE_LABEL"
   say "  Product    : $(adbs getprop ro.product.name)"
   say "  Android    : $(adbs getprop ro.build.version.release) (SDK $(adbs getprop ro.build.version.sdk))"
   say "  One UI     : $(oneui_version "$(adbs getprop ro.build.version.oneui)")"
   say "  Build      : $(adbs getprop ro.build.display.id)"
+  say "  Security   : $(adbs getprop ro.build.version.security_patch)"
   say "  CSC        : $(adbs getprop ro.csc.sales_code) / $(adbs getprop ro.csc.countryiso_code)"
   say "  ABI        : $(adbs getprop ro.product.cpu.abi)"
 
@@ -356,6 +442,11 @@ do_report() {
 
   head1 "Storage"
   adbs "df -h /data | tail -1" | sed 's/^/  /'
+
+  if [ "$DEVICE_CLASS" = "watch" ]; then
+    head1 "Battery"
+    adbs "dumpsys battery | grep -E 'level:|status:|health:|temperature:'" | sed 's/^/  /'
+  fi
 
   head1 "Users"
   list_real_users | while IFS='	' read -r id name; do
@@ -373,17 +464,23 @@ do_report() {
 }
 
 # ------------------------------------------------------------------ list
-do_list() {
-  local t label
+list_profile_set() {
+  local title="$1" dir="$2" t label
+  head1 "$title"
   for t in 1 2 3; do
     case $t in 1) label=light ;; 2) label=balanced ;; 3) label=aggressive ;; esac
-    head1 "$label  (tier <= $t) - $(count_rows "$PROFILES/packages.tsv" "$t") packages"
-    ts_filter "$PROFILES/packages.tsv" "$t" | awk -F'\t' '{printf "  %-52s %s\n", $2, $4}'
+    head1 "$label  (tier <= $t) - $(count_rows "$dir/packages.tsv" "$t") packages"
+    ts_filter "$dir/packages.tsv" "$t" | awk -F'\t' '{printf "  %-52s %s%s\n", $2, $4, ($5 != "" ? " [" $5 "]" : "")}'
   done
-  head1 "extras (--extras only) - $(ts_filter "$PROFILES/extras.tsv" 9 | wc -l | tr -d ' ') packages"
-  ts_filter "$PROFILES/extras.tsv" 9 | awk -F'\t' '{printf "  %-52s %s\n", $2, $4}'
+  head1 "extras (--extras only) - $(ts_filter "$dir/extras.tsv" 9 | wc -l | tr -d ' ') packages"
+  ts_filter "$dir/extras.tsv" 9 | awk -F'\t' '{printf "  %-52s %s%s\n", $2, $4, ($5 != "" ? " [" $5 "]" : "")}'
   head1 "settings"
-  awk -F'\t' '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 {printf "  [tier %s] %s/%s = %s\n", $1, $2, $3, $4}' "$PROFILES/settings.tsv"
+  awk -F'\t' '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 {printf "  [tier %s] %s/%s = %s\n", $1, $2, $3, $4}' "$dir/settings.tsv"
+}
+
+do_list() {
+  list_profile_set "Galaxy tablet / Android profiles" "$PROFILES"
+  list_profile_set "Galaxy Watch / Wear OS profiles" "$PROFILES/watch"
 }
 
 # ------------------------------------------------------------------ backup
@@ -401,13 +498,15 @@ new_backup_dir() {
   : > "$MANIFEST"
   : > "$SETTINGS_MANIFEST"
   {
-    echo "Tab S10 FE+ Optimiser v$VERSION"
+    echo "Universal Samsung Optimiser v$VERSION"
     echo "date      : $(date)"
     echo "profile   : $PROFILE"
     echo "extras    : $WANT_EXTRAS"
     echo "serial    : $SERIAL"
     echo "model     : $MODEL"
     echo "device    : $DEVICE"
+    echo "class     : $DEVICE_CLASS"
+    echo "hardware  : $HARDWARE_ID"
     echo "android   : $RELEASE"
     echo "oneui     : $ONUI"
     echo "host      : $(uname -s) $(uname -r)"
@@ -419,9 +518,83 @@ latest_backup() {
   ls -1d "$BACKUPS"/*/ 2>/dev/null | sort | tail -1 | sed 's:/*$::'
 }
 
+# ------------------------------------------------------------------ before / after snapshots
+capture_snapshot() { # capture_snapshot <file> <space/newline-separated users>
+  local file="$1" users="$2" u n installed=0 enabled=0 mem_kb data_free_kb battery
+  for u in $users; do
+    n="$(adbs "pm list packages --user $u" | wc -l | tr -d ' ')"
+    case "$n" in ''|*[!0-9]*) n=0 ;; esac
+    installed=$((installed+n))
+    n="$(adbs "pm list packages -e --user $u" | wc -l | tr -d ' ')"
+    case "$n" in ''|*[!0-9]*) n=0 ;; esac
+    enabled=$((enabled+n))
+  done
+  mem_kb="$(adbs "cat /proc/meminfo" | awk '$1=="MemAvailable:" {print $2; exit}')"
+  data_free_kb="$(adbs "df -k /data" | awk 'END {print $4}')"
+  battery="$(adbs "dumpsys battery" | sed -n 's/^[[:space:]]*level:[[:space:]]*//p' | head -1)"
+  printf 'captured_at\t%s\ninstalled_packages\t%s\nenabled_packages\t%s\nmem_available_kb\t%s\ndata_free_kb\t%s\nbattery_percent\t%s\n' \
+    "$(date '+%Y-%m-%d %H:%M:%S')" "$installed" "$enabled" "${mem_kb:-0}" "${data_free_kb:-0}" "${battery:-0}" > "$file"
+}
+
+snapshot_value() { # snapshot_value <file> <key>
+  awk -F'\t' -v key="$2" '$1==key {print $2; exit}' "$1"
+}
+
+format_mib() {
+  awk -v kb="${1:-0}" 'BEGIN {printf "%.1f MiB", kb / 1024}'
+}
+
+format_gib() {
+  awk -v kb="${1:-0}" 'BEGIN {printf "%.2f GiB", kb / 1048576}'
+}
+
+number_delta() {
+  awk -v before="${1:-0}" -v after="${2:-0}" 'BEGIN {d=after-before; printf "%+.0f", d}'
+}
+
+memory_delta() {
+  awk -v before="${1:-0}" -v after="${2:-0}" 'BEGIN {d=(after-before)/1024; printf "%+.1f MiB", d}'
+}
+
+storage_delta() {
+  awk -v before="${1:-0}" -v after="${2:-0}" 'BEGIN {d=(after-before)/1048576; printf "%+.2f GiB", d}'
+}
+
+show_snapshot() { # show_snapshot <heading> <file>
+  local heading="$1" file="$2" installed enabled mem free battery
+  installed="$(snapshot_value "$file" installed_packages)"
+  enabled="$(snapshot_value "$file" enabled_packages)"
+  mem="$(snapshot_value "$file" mem_available_kb)"
+  free="$(snapshot_value "$file" data_free_kb)"
+  battery="$(snapshot_value "$file" battery_percent)"
+  head1 "$heading"
+  say "  Installed packages : $installed"
+  say "  Enabled packages   : $enabled"
+  say "  Available RAM      : $(format_mib "$mem")"
+  say "  Free /data         : $(format_gib "$free")"
+  say "  Battery            : ${battery}%"
+}
+
+show_before_after() { # show_before_after <before-file> <after-file>
+  local before="$1" after="$2" bi ai be ae bm am bf af bb ab
+  bi="$(snapshot_value "$before" installed_packages)"; ai="$(snapshot_value "$after" installed_packages)"
+  be="$(snapshot_value "$before" enabled_packages)";   ae="$(snapshot_value "$after" enabled_packages)"
+  bm="$(snapshot_value "$before" mem_available_kb)";   am="$(snapshot_value "$after" mem_available_kb)"
+  bf="$(snapshot_value "$before" data_free_kb)";       af="$(snapshot_value "$after" data_free_kb)"
+  bb="$(snapshot_value "$before" battery_percent)";   ab="$(snapshot_value "$after" battery_percent)"
+  head1 "Before -> after (immediate)"
+  printf '  %-21s %14s %14s %14s\n' "Metric" "Before" "After" "Change"
+  printf '  %-21s %14s %14s %14s\n' "Installed packages" "$bi" "$ai" "$(number_delta "$bi" "$ai")"
+  printf '  %-21s %14s %14s %14s\n' "Enabled packages" "$be" "$ae" "$(number_delta "$be" "$ae")"
+  printf '  %-21s %14s %14s %14s\n' "Available RAM" "$(format_mib "$bm")" "$(format_mib "$am")" "$(memory_delta "$bm" "$am")"
+  printf '  %-21s %14s %14s %14s\n' "Free /data" "$(format_gib "$bf")" "$(format_gib "$af")" "$(storage_delta "$bf" "$af")"
+  printf '  %-21s %13s%% %13s%% %13s%%\n' "Battery" "$bb" "$ab" "$(number_delta "$bb" "$ab")"
+  dim "  RAM is an immediate reading; compare again after reboot for a stable result."
+}
+
 # ------------------------------------------------------------------ apply
 do_apply() {
-  local tier users u total=0 rc pkg cat
+  local tier users u total=0 rc pkg cat action before_file after_file
   tier="$(profile_tier "$PROFILE")" || die "unknown profile '$PROFILE' (use light, balanced or aggressive)"
 
   require_device
@@ -429,11 +602,12 @@ do_apply() {
   [ -z "$users" ] && die "could not determine any user profile"
 
   head1 "Plan"
+  say "  Target     : $DEVICE_LABEL"
   say "  Profile    : ${C_BOLD}$PROFILE${C_RESET} (tier <= $tier)"
-  say "  Packages   : $(count_rows "$PROFILES/packages.tsv" "$tier")"
-  say "  Settings   : $(awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$PROFILES/settings.tsv" | wc -l | tr -d ' ')"
+  say "  Packages   : $(count_rows "$PACKAGES_FILE" "$tier")"
+  say "  Settings   : $(awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" | wc -l | tr -d ' ')"
   say "  Users      : $(printf '%s' "$users" | tr '\n' ' ')"
-  [ "$WANT_EXTRAS" -eq 1 ] && say "  Extras     : ${C_YELLOW}yes - Knox / OTA / Samsung account will be removed${C_RESET}"
+  [ "$WANT_EXTRAS" -eq 1 ] && say "  Extras     : ${C_YELLOW}yes - device-critical optional services will be changed${C_RESET}"
   [ "$DISABLE_PRELOADS" -eq 1 ] && say "  Preloads   : disabled (kept on disk) instead of deleted"
   [ "$DRY_RUN" -eq 1 ] && say "  Mode       : ${C_YELLOW}dry run - nothing will change${C_RESET}"
 
@@ -446,26 +620,31 @@ do_apply() {
   if [ "$DRY_RUN" -eq 0 ]; then
     new_backup_dir
     info "Backup written to $LAST_BACKUP"
+    before_file="$LAST_BACKUP/before.txt"
+  else
+    before_file="$TMP/before.txt"
   fi
+  capture_snapshot "$before_file" "$users"
+  [ "$DRY_RUN" -eq 1 ] && show_snapshot "Current baseline" "$before_file"
 
   for u in $users; do
     head1 "User $u - $(user_label "$u")"
     cache_packages "$u"
 
-    info "Removing packages"
-    ts_filter "$PROFILES/packages.tsv" "$tier" > "$TMP/list.txt"
+    info "Applying package profile"
+    ts_filter "$PACKAGES_FILE" "$tier" > "$TMP/list.txt"
     if [ "$WANT_EXTRAS" -eq 1 ]; then
-      ts_filter "$PROFILES/extras.tsv" 9 >> "$TMP/list.txt"
+      ts_filter "$EXTRAS_FILE" 9 >> "$TMP/list.txt"
     fi
-    while IFS='	' read -r _ pkg cat _note; do
+    while IFS='	' read -r _ pkg cat _note action; do
       [ -z "${pkg:-}" ] && continue
-      apply_pkg "$u" "$pkg" "$cat"
+      apply_pkg "$u" "$pkg" "$cat" "${action:-auto}"
       case $? in 0) total=$((total+1)) ;; esac
     done < "$TMP/list.txt"
   done
 
   head1 "System settings"
-  awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$PROFILES/settings.tsv" > "$TMP/settings.txt"
+  awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" > "$TMP/settings.txt"
   while IFS='	' read -r _ ns key val note; do
     [ -z "${ns:-}" ] && continue
     apply_setting "$ns" "$key" "$val" "$note"
@@ -484,14 +663,19 @@ do_apply() {
     ok "dexopt job finished"
   fi
 
-  head1 "Done"
   if [ "$DRY_RUN" -eq 1 ]; then
+    head1 "Done"
     say "  Dry run complete - nothing was changed."
   else
+    after_file="$LAST_BACKUP/after.txt"
+    capture_snapshot "$after_file" "$users"
+    show_before_after "$before_file" "$after_file"
+    head1 "Done"
     say "  $total package actions applied."
     say "  Backup: $LAST_BACKUP"
     say "  Undo  : ./run.sh --restore"
     dim  "  A reboot is recommended so every change takes effect."
+    [ "$DEVICE_CLASS" = "watch" ] && dim "  Turn off ADB debugging and wireless debugging on the watch when finished."
   fi
 
   if [ "$WANT_REBOOT" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
@@ -501,6 +685,19 @@ do_apply() {
 }
 
 # ------------------------------------------------------------------ restore
+validate_backup_target() { # validate_backup_target <backup-dir>
+  local dir="$1" backup_device backup_class
+  [ -f "$dir/info.txt" ] || { warn "backup has no device metadata; target cannot be verified"; return 0; }
+  backup_device="$(sed -n 's/^device[[:space:]]*:[[:space:]]*//p' "$dir/info.txt" | head -1)"
+  backup_class="$(sed -n 's/^class[[:space:]]*:[[:space:]]*//p' "$dir/info.txt" | head -1)"
+  if [ -n "$backup_device" ] && [ "$backup_device" != "$DEVICE" ]; then
+    die "backup is for device '$backup_device', but the connected device is '$DEVICE'"
+  fi
+  if [ -n "$backup_class" ] && [ "$backup_class" != "$DEVICE_CLASS" ]; then
+    die "backup is for class '$backup_class', but the connected device is '$DEVICE_CLASS'"
+  fi
+}
+
 do_restore() {
   local dir u pkg action cat ns key old note n=0 out
   local pkg_src set_src
@@ -511,6 +708,7 @@ do_restore() {
     dir="$RESTORE_DIR"
     [ -d "$dir" ] || die "backup not found: $dir"
     [ -f "$dir/packages.tsv" ] || die "not a valid backup (no packages.tsv): $dir"
+    validate_backup_target "$dir"
     pkg_src="$dir/packages.tsv"
     set_src="$dir/settings.tsv"
     head1 "Restoring a single run from $dir"
@@ -579,44 +777,59 @@ do_restore() {
 
 # ------------------------------------------------------------------ restore-all
 do_restore_all() {
-  local u pkg cat n=0 out
+  local u pkg cat action n=0 out
   require_device
   head1 "Reinstalling every package from every profile"
 
   if [ "$ASSUME_YES" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
     printf '\n  This reinstalls ~%s packages on all users. Continue? [y/N] ' \
-      "$( (ts_filter "$PROFILES/packages.tsv" 9; ts_filter "$PROFILES/extras.tsv" 9) | wc -l | tr -d ' ')"
+      "$( (ts_filter "$PACKAGES_FILE" 9; ts_filter "$EXTRAS_FILE" 9) | wc -l | tr -d ' ')"
     read -r answer
     case "$answer" in y|Y|yes|YES) ;; *) say "  cancelled."; exit 0 ;; esac
   fi
 
   for u in $(resolve_users); do
     head1 "User $u - $(user_label "$u")"
-    (ts_filter "$PROFILES/packages.tsv" 9; ts_filter "$PROFILES/extras.tsv" 9) > "$TMP/all.txt"
-    while IFS='	' read -r _ pkg cat _note; do
+    (ts_filter "$PACKAGES_FILE" 9; ts_filter "$EXTRAS_FILE" 9) > "$TMP/all.txt"
+    while IFS='	' read -r _ pkg cat _note action; do
       [ -z "${pkg:-}" ] && continue
-      if [ "$DRY_RUN" -eq 1 ]; then say "    would reinstall $pkg"; continue; fi
-      out="$(adbs "pm install-existing --user $u '$pkg'")"
-      case "$out" in
-        *installed*) n=$((n+1)) ;;
-        *"not installed"*|*"Unknown package"*) ;;
-        *) : ;;
-      esac
+      if [ "$DRY_RUN" -eq 1 ]; then
+        if [ "${action:-auto}" = "disable" ]; then say "    would enable $pkg"; else say "    would reinstall $pkg"; fi
+        continue
+      fi
+      if [ "${action:-auto}" = "disable" ]; then
+        out="$(adbs "pm enable --user $u '$pkg'")"
+        case "$out" in *enabled*) n=$((n+1)) ;; esac
+      else
+        out="$(adbs "pm install-existing --user $u '$pkg'")"
+        case "$out" in
+          *installed*) n=$((n+1)) ;;
+          *"not installed"*|*"Unknown package"*) ;;
+          *) : ;;
+        esac
+      fi
     done < "$TMP/all.txt"
-    adbs "pm enable --user $u 'com.android.chrome'" >/dev/null 2>&1
+    [ "$DEVICE_CLASS" != "watch" ] && adbs "pm enable --user $u 'com.android.chrome'" >/dev/null 2>&1
   done
 
   head1 "Restoring default settings"
-  adbs "settings put global window_animation_scale 1.0" >/dev/null
-  adbs "settings put global transition_animation_scale 1.0" >/dev/null
-  adbs "settings put global animator_duration_scale 1.0" >/dev/null
-  adbs "settings delete global cached_apps_freezer" >/dev/null
-  adbs "settings put global sem_enhanced_cpu_responsiveness 0" >/dev/null
-  adbs "settings put global wifi_scan_always_enabled 1" >/dev/null
-  adbs "settings put global ble_scan_always_enabled 1" >/dev/null
-  adbs "settings delete system min_refresh_rate" >/dev/null
-  adbs "settings delete system peak_refresh_rate" >/dev/null
-  ok "animation scales back to 1.0, refresh-rate overrides cleared"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    say "    would restore animation scales and clear the cached-app freezer override"
+    [ "$DEVICE_CLASS" != "watch" ] && say "    would restore tablet CPU, radio-scan and refresh-rate defaults"
+  else
+    adbs "settings put global window_animation_scale 1.0" >/dev/null
+    adbs "settings put global transition_animation_scale 1.0" >/dev/null
+    adbs "settings put global animator_duration_scale 1.0" >/dev/null
+    adbs "settings delete global cached_apps_freezer" >/dev/null
+    if [ "$DEVICE_CLASS" != "watch" ]; then
+      adbs "settings put global sem_enhanced_cpu_responsiveness 0" >/dev/null
+      adbs "settings put global wifi_scan_always_enabled 1" >/dev/null
+      adbs "settings put global ble_scan_always_enabled 1" >/dev/null
+      adbs "settings delete system min_refresh_rate" >/dev/null
+      adbs "settings delete system peak_refresh_rate" >/dev/null
+    fi
+    ok "default settings restored for $DEVICE_LABEL"
+  fi
 
   head1 "Done"
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -653,7 +866,7 @@ while [ $# -gt 0 ]; do
     --list)      MODE="list"; shift ;;
     --report)    MODE="report"; shift ;;
     --help|-h)   usage; exit 0 ;;
-    --version)   echo "tab-s10-fe-optimiser $VERSION"; exit 0 ;;
+    --version)   echo "universal-samsung-optimiser $VERSION"; exit 0 ;;
     *)           fail "unknown argument: $1"; say ""; usage; exit 2 ;;
   esac
 done
@@ -661,7 +874,7 @@ done
 # normalise user list
 USER_LIST="$(printf '%s\n' $USER_LIST | grep -v '^$' | tr '\n' ' ' | sed 's/ *$//')"
 
-TMP="$(mktemp -d 2>/dev/null || mktemp -d -t tabopt)"
+TMP="$(mktemp -d 2>/dev/null || mktemp -d -t samsungopt)"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 case "$MODE" in
@@ -674,12 +887,18 @@ esac
 # ------------------------------------------------------------------ no profile? show a menu
 if [ -z "$PROFILE" ]; then
   require_device
-  head1 "Tab S10 FE+ Optimiser v$VERSION"
-  say "  Device: ${C_BOLD}${MODEL}${C_RESET} - Android ${RELEASE}${ONUI}"
+  head1 "Universal Samsung Optimiser v$VERSION"
+  say "  Device: ${C_BOLD}${MODEL}${C_RESET} - Android ${RELEASE}${ONUI} ($DEVICE_LABEL)"
   say ""
-  say "  ${C_BOLD}1)${C_RESET} light       - telemetry, diagnostics, AR toys, preloads"
-  say "  ${C_BOLD}2)${C_RESET} balanced    - + Bixby, Samsung extras, gaming services, TTS packs"
-  say "  ${C_BOLD}3)${C_RESET} aggressive  - + browsers, Office, YouTube, Samsung account apps"
+  if [ "$DEVICE_CLASS" = "watch" ]; then
+    say "  ${C_BOLD}1)${C_RESET} light       - retail demo, certification and factory test leftovers"
+    say "  ${C_BOLD}2)${C_RESET} balanced    - + Bixby, customisation and enterprise provisioning"
+    say "  ${C_BOLD}3)${C_RESET} aggressive  - + optional apps; calls, messages and health stay"
+  else
+    say "  ${C_BOLD}1)${C_RESET} light       - telemetry, diagnostics, AR toys, preloads"
+    say "  ${C_BOLD}2)${C_RESET} balanced    - + Bixby, Samsung extras, gaming services, TTS packs"
+    say "  ${C_BOLD}3)${C_RESET} aggressive  - + browsers, Office, YouTube, Samsung account apps"
+  fi
   say "  ${C_BOLD}4)${C_RESET} restore     - undo the last run"
   say "  ${C_BOLD}5)${C_RESET} report      - show device info without changing anything"
   say "  ${C_BOLD}q)${C_RESET} quit"

@@ -1,4 +1,4 @@
-# v1.2.4 — Tab S10 FE+ Optimiser
+# v1.2.4 — Universal Samsung Optimiser
 
 First tagged release. Reversible ADB debloat + tuning for the Samsung Galaxy Tab S10 FE+
 (SM-X620), written to work on most One UI tablets too.
@@ -38,8 +38,8 @@ Real SM-X620, after each profile and a reboot:
 ## Quick start
 
 ```bash
-git clone https://github.com/H33CKER/tab-s10-fe-optimiser.git
-cd tab-s10-fe-optimiser
+git clone https://github.com/H33CKER/universal-samsung-optimiser.git
+cd universal-samsung-optimiser
 
 ./run.sh --report             # look, change nothing
 ./run.sh balanced --dry-run   # preview every action
@@ -69,5 +69,5 @@ Windows: `.\run.ps1 balanced` (PowerShell 5.1+), same arguments.
 - `--extras` is opt-in only: it removes Knox and the OTA updater, which breaks Secure
   Folder and stops security updates.
 
-See [CHANGELOG.md](https://github.com/H33CKER/tab-s10-fe-optimiser/blob/main/CHANGELOG.md)
+See [CHANGELOG.md](https://github.com/H33CKER/universal-samsung-optimiser/blob/main/CHANGELOG.md)
 for the full history.

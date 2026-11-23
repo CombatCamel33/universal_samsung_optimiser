@@ -1,0 +1,7 @@
+# EXTRA Galaxy Watch packages - only applied when --extras is explicitly passed.
+# --------------------------------------------------------------------------------------------------------------------
+# These disable OTA updating. They are not part of light, balanced, or aggressive and normally should stay enabled.
+# Same columns as packages.tsv: tier package category note action
+
+extras	com.sec.android.soagent	Samsung	Software-update metadata agent; disabling it stops normal OTA update checks	disable
+extras	com.wssyncmldm	Samsung	Software-update download/install manager; disabling it stops normal OTA updates	disable

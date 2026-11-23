@@ -1,8 +1,11 @@
-# Galaxy Tab S10 FE+ Optimiser
+# Universal Samsung Optimiser
 
-One-command, **fully reversible** ADB optimiser for the Samsung Galaxy Tab S10 FE+ (and most modern Samsung tablets).
+One-command, **fully reversible**, device-aware ADB optimiser for the Samsung Galaxy
+Tab S10 FE+ and Galaxy Watch6.
 
-Removes background bloat, kills Samsung's sluggish animation scaling and tunes the system for smoother UI and lower RAM usage. Works on **macOS, Windows and Linux**. No root, no custom ROM, no warranty voiding.
+It detects tablets versus Wear OS watches before loading a profile, removes background
+bloat, shortens sluggish animations, and tunes each device with settings that are valid
+for its hardware. Works on **macOS, Windows and Linux**. No root or custom ROM.
 
 ```bash
 ./run.sh balanced      # macOS / Linux
@@ -11,7 +14,30 @@ Removes background bloat, kills Samsung's sluggish animation scaling and tunes t
 
 ---
 
+## Galaxy Watch6 aggressive results
+
+Measured on the SM-R930 immediately before applying the 44-action profile and again
+after rebooting on the same build:
+
+| Metric | Before | `aggressive` | Change |
+|---|---:|---:|---:|
+| Installed packages | 249 | **205** | **-44** |
+| Enabled packages | 247 | **203** | **-44** |
+| Available RAM | 657.0 MiB | **790.4 MiB** | **+133.4 MiB** |
+| Free `/data` storage | 5.70 GiB | **6.04 GiB** | **+355.4 MiB** |
+| Animation scales | 1.0× / 1.0× / 1.0× | **0.5× / 0.5× / 0.5×** | Halved |
+| Reduce transparency and blur | on (pre-existing) | **on (profile-enforced)** | Retained after reboot |
+
+All 44 targets were confirmed absent after reboot. Calls, Google Messages, Samsung
+Health, Health Services, Health Monitor, emergency/SOS, NFC, Play Store, Galaxy Store,
+phone connectivity, System UI, tiles and core watch faces were confirmed installed.
+RAM varies with running apps; the post-reboot figure is a point-in-time comparison.
+
+---
+
 ## Tested on
+
+### Galaxy Tab S10 FE+
 
 | | |
 |---|---|
@@ -22,7 +48,26 @@ Removes background bloat, kills Samsung's sluggish animation scaling and tunes t
 | Display | 1800 × 2880, 90 Hz |
 | Users | 2 real profiles + Secure Folder |
 
-The script is generic: it only touches packages that actually exist on your device, so it also works on the S10 FE, S9 FE, Tab S9/S10 series and most Galaxy phones.
+### Galaxy Watch6
+
+| | |
+|---|---|
+| Device | Galaxy Watch6 Bluetooth 40 mm (`SM-R930` / `fresh6bs`) |
+| OS | Android 16, Wear OS 6, One UI Watch 8.0 |
+| Build | `BP2A.250325.020.R930XXS2CZF5` (CSC `BTU`) |
+| Security patch | 5 July 2026 |
+| RAM / storage | 2 GB / 8 GB |
+| Display | 432 × 432, fixed 60 Hz |
+| Connection | Wireless ADB pairing and automatic mDNS discovery |
+
+Watch detection, inventory, reporting, protected-package checks, all three dry-run plans,
+and the full aggressive profile were validated on this device. The watch has a separate
+package/settings profile; the tablet's 90 Hz and CPU-performance overrides can never be
+selected for it.
+
+The tablet profile still only touches packages that exist on the target, so it also works
+on the S10 FE, S9 FE, and Tab S9/S10 series. Use extra care on phones: the tablet's
+aggressive tier intentionally removes its telephony stack.
 
 ## Results on the test tablet
 
@@ -55,11 +100,15 @@ were the launcher, System UI, Play Services and the keyboard.
    - macOS: `brew install android-platform-tools`
    - Windows: [download platform-tools](https://developer.android.com/tools/releases/platform-tools) and unzip it
    - Linux: `sudo apt install android-tools-adb` (or your distro's package)
-2. **USB debugging** on the tablet:
-   - Settings → About tablet → Software information → tap **Build number** 7 times
-   - Settings → Developer options → enable **USB debugging**
-   - Connect the cable and accept the RSA prompt on the tablet
-3. A USB **data** cable (many charging cables are power-only)
+2. A debugging connection:
+   - **Tablet (USB):**
+     - Settings → About tablet → Software information → tap **Build number** 7 times
+     - Settings → Developer options → enable **USB debugging**
+     - Connect a USB **data** cable and accept the RSA prompt
+   - **Galaxy Watch (wireless):**
+     - Settings → About watch → Software information → tap **Software version** 7 times
+     - Developer options → enable **ADB debugging** and **Wireless debugging**
+     - Follow [Wireless ADB for Galaxy Watch](docs/WATCH.md#wireless-adb)
 
 The scripts find `adb` automatically in the usual SDK / Homebrew / `Downloads/platform-tools` locations. If yours is somewhere else:
 
@@ -71,13 +120,21 @@ $env:ADB="C:\path\adb.exe"; .\run.ps1 balanced   # Windows
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/tab-s10-fe-optimiser.git
-cd tab-s10-fe-optimiser
+git clone https://github.com/H33CKER/universal-samsung-optimiser.git
+cd universal-samsung-optimiser
 
 ./run.sh                 # interactive menu
 ./run.sh --report        # look first, change nothing
 ./run.sh balanced --dry-run   # preview every action
 ./run.sh balanced        # apply
+```
+
+For a watch, pair first. The pairing port/code and normal debugging port are different:
+
+```bash
+adb pair WATCH_IP:PAIRING_PORT PAIRING_CODE
+adb connect WATCH_IP:DEBUG_PORT       # only if mDNS did not connect automatically
+./run.sh aggressive --dry-run         # automatically selects the watch profile
 ```
 
 On Windows use `.\run.ps1` with the same arguments. If PowerShell blocks the script:
@@ -90,6 +147,8 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1 balanced
 
 Every profile is cumulative: `balanced` includes `light`, `aggressive` includes both.
 
+### Tablet profiles
+
 | Profile | Packages | What it adds |
 |---|---|---|
 | `light` | 30 | Pure telemetry, diagnostics, factory test apps, AR-emoji toys, the preloaded Asphalt demo, duplicate CTS shims |
@@ -100,9 +159,26 @@ Every profile is cumulative: `balanced` includes `light`, `aggressive` includes 
 
 `light` is safe for anyone. `balanced` is what I run daily. `aggressive` is for a tablet used as a browser + media device.
 
-Full per-package explanation: **[docs/TWEAKS.md](docs/TWEAKS.md)**.
+### Galaxy Watch profiles
 
-## What `aggressive` removes - and what stops working
+| Profile | Actions | What it adds |
+|---|---:|---|
+| `light` | 14 | Retail demo, CTS certification shims, factory/service test tools, Device Quality Agent telemetry |
+| `balanced` | 23 | + Bixby, Samsung Pay, Customization Service, self-diagnostics, partner and enterprise provisioning; Google Wallet stays |
+| `aggressive` | 44 | + Google Assistant/Gemini, Google Wallet, Global Goals, Outlook, Samsung Internet, SmartThings, optional media/tools and Samsung Messages |
+| `--extras` | +2 | OTA update agents. **Opt-in only** — stops normal watch updates |
+
+The watch aggressive tier still keeps **all calling components, Google Messages, Samsung
+Health, Health Services, Health Monitor, sleep tracking, sensors, emergency/SOS, Find My
+Watch, phone connectivity, tiles, keyboards and all core stock watch faces**. Only the
+promotional Global Goals face companions are part of aggressive. Every watch target is
+uninstalled; system apps remain restorable, while `/data` apps require a store reinstall.
+Use `--disable-preloads` to preserve `/data` APKs and data instead.
+Google Play Store and Galaxy Store are hard-protected in every watch tier.
+
+Full explanations: **[tablet tweaks](docs/TWEAKS.md)** · **[Galaxy Watch profiles](docs/WATCH.md)**.
+
+## What tablet `aggressive` removes - and what stops working
 
 `aggressive` is meant for a tablet used as a browser + media device. It removes whole
 apps, not just background services, so read this before running it.
@@ -192,7 +268,21 @@ Notes:
 `--trim` usually frees a few GB on a tablet that has been used for a while.
 `--dexopt` can take 5-15 minutes; it improves cold-start times until the next OTA.
 
-## The system tweaks (all profiles)
+### Automatic before / after
+
+Every real profile run captures a baseline before making changes and a second snapshot
+afterward. The terminal and backup show installed/enabled package counts, available RAM,
+free `/data` storage, and battery level. The immediate RAM number is indicative only;
+reboot before making a stable comparison.
+
+Dry runs capture and print only the current baseline—nothing is written to `backups/`.
+
+## System tweaks
+
+The animation/freezer settings apply to both device families. Reduce transparency and
+blur is **watch-only**; the remaining performance, scan and refresh-rate settings are
+**tablet-only**. The Watch6 has a fixed 60 Hz panel and never receives tablet display or
+Samsung CPU-performance overrides.
 
 | Tweak | Why |
 |---|---|
@@ -200,6 +290,7 @@ Notes:
 | `transition_animation_scale` → `0.5` | Same for app-switch transitions. |
 | `animator_duration_scale` → `0.5` | Same for in-app animations. |
 | `cached_apps_freezer` → `enabled` | Freezes cached background apps instead of keeping them resident. |
+| `accessibility_reduce_transparency` → `1` *(watch)* | Enables Accessibility → Visibility enhancements → Reduce transparency and blur, reducing compositing overhead. |
 | `peak_refresh_rate` → `90` | Never caps the 90 Hz panel. |
 | `sem_enhanced_cpu_responsiveness` → `1` *(balanced)* | Samsung's "Processing speed: High" scheduler mode. |
 | `min_refresh_rate` → `60` *(balanced)* | Stops the panel dropping to 30 Hz and making scrolling judder. |
@@ -212,20 +303,28 @@ System apps are never deleted. They are removed **per user profile** with
 `pm uninstall -k --user N`, which keeps all app data, and every action is written to
 `backups/` before it happens.
 
-Data-installed preloads (Microsoft Office, Samsung Notes, Samsung Internet, the Asphalt
-demo...) are removed completely: `pm uninstall` deletes the APK **and** their app data,
-since that data would just be orphaned once the APK is gone. Because their APK is not in
-the read-only system image they cannot be restored with `pm install-existing` - they
-have to be downloaded again from the store.
+On the tablet, data-installed preloads (Microsoft Office, Samsung Notes, Samsung
+Internet, the Asphalt demo...) are removed completely: `pm uninstall` deletes the APK
+**and** their app data, since that data would just be orphaned once the APK is gone.
+Because their APK is not in the read-only system image they cannot be restored with
+`pm install-existing` - they have to be downloaded again from the store.
 
 If you want to keep that option, add `--disable-preloads`: those apps are then hidden
 and stopped but stay on disk, and `pm enable` brings them back instantly.
+
+The watch profile uninstalls every target. System-image watch apps use reversible per-user
+uninstall. Watch apps whose APK lives only in `/data` are deleted with their app data and
+must be downloaded again; use `--disable-preloads` to disable and preserve them instead.
 
 ```
 backups/
 ├── applied.tsv              every package action ever taken (user, package, action)
 ├── original-settings.tsv    the original value of every setting touched
-└── 20261122-102849/         one folder per run (info.txt + that run's changes)
+├── 20261122-102849/         tablet run: manifests + before.txt / after.txt
+└── watch-SM-R930-…/         isolated per-watch history
+    ├── applied.tsv
+    ├── original-settings.tsv
+    └── 20261123-120000/     watch run: manifests + before.txt / after.txt
 ```
 
 Undo everything:
@@ -240,6 +339,9 @@ On Windows: `.\run.ps1 -Restore`, `.\run.ps1 -RestoreAll`.
 
 Restoring puts the system apps back exactly as they were (same user, data intact).
 Reboot afterwards.
+
+Watch and tablet histories are isolated, and an explicitly selected backup is rejected
+if its recorded device codename/class does not match the connected target.
 
 What a restore cannot bring back are **data-installed preloads** (Office, Samsung
 Notes, Samsung Internet, the Asphalt demo, some TTS voices) - their APK is not in the
@@ -272,7 +374,9 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 - **Keeps app data for system apps.** Every system-image app is removed with `-k`, so its
   data survives and a restore is lossless. Only `/data`-installed preloads lose their data,
   because the APK is deleted anyway.
-- **Protected-package blocklist** in both scripts refuses to touch `systemui`, `settings`, `gms`, `vending`, the launcher, the keyboard, permission controllers, etc.
+- **Protected-package blocklist** refuses to touch core Android packages. On watches it
+  additionally protects both System UIs, Wear Services, phone pairing/transport, tiles,
+  health services, calls, safety/SOS, Find My Watch, NFC, stores and the Samsung account.
 - **Idempotent.** Running a profile twice does nothing the second time.
 - **No OTA or Knox changes** unless you pass `--extras`.
 - The worst realistic outcome is an app you wanted disappearing from the launcher — `--restore` brings it back in seconds.
@@ -288,15 +392,18 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 ├── profiles/
 │   ├── packages.tsv          tier, package, category, explanation
 │   ├── settings.tsv          tier, namespace, key, value, explanation
-│   └── extras.tsv            opt-in Knox / OTA / Samsung account
+│   ├── extras.tsv            opt-in Knox / OTA / Samsung account
+│   └── watch/                device-specific packages, settings and extras
 ├── docs/
 │   ├── TWEAKS.md             every package explained
+│   ├── WATCH.md              Watch6 profiles + wireless ADB guide
 │   ├── RESTORE.md            undo guide
 │   └── TROUBLESHOOTING.md    when adb misbehaves
 └── backups/                  generated at run time (git-ignored)
 ```
 
-Want to add or drop a package? Edit `profiles/packages.tsv` — the scripts and the docs are generated from that one file.
+Want to add or drop a package? Edit `profiles/packages.tsv` for tablets or
+`profiles/watch/packages.tsv` for watches, then run `python3 tools/generate-docs.py`.
 
 ## Contributing
 

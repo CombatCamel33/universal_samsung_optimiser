@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.0
+
+- Renamed the project and CLI to **Universal Samsung Optimiser**.
+- Added device-aware Galaxy Watch / Wear OS support with dedicated cumulative `light`,
+  `balanced`, and `aggressive` profiles.
+- Tested profile detection, dry runs, and the full 44-action aggressive profile on
+  Galaxy Watch6 Bluetooth 40 mm (`SM-R930`, Android 16 / Wear OS 6 / One UI Watch 8.0).
+- Watch aggressive preserves calls, Google Messages, health/sleep tracking, safety,
+  connectivity, stores, tiles, keyboards, and core stock watch faces.
+- Added explicit per-package `uninstall` / `disable` actions. Normal watch profiles
+  uninstall every target; `--disable-preloads` preserves `/data` APKs and data when wanted.
+- Added automatic before/after snapshots for package counts, available RAM, storage,
+  and battery level.
+- Watch backup histories are isolated per device, and explicit restores reject backups
+  recorded for a different device class/codename.
+- Added wireless ADB instructions and generated `docs/WATCH.md` reference documentation.
+
 ## 1.2.5
 
 - `aggressive` now also removes **YouTube Music**, **Google Drive**, **Google Docs** and

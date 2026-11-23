@@ -34,6 +34,26 @@ adb devices
 If the prompt never appears: Settings → Developer options → **Revoke USB debugging
 authorisations**, then replug.
 
+### Galaxy Watch wireless ADB
+
+The **Pair new device** screen shows a temporary pairing port and six-digit code. Pair
+while that screen remains open:
+
+```bash
+adb pair WATCH_IP:PAIRING_PORT PAIRING_CODE
+```
+
+The main **Wireless debugging** screen shows a different normal debugging port. Modern
+ADB usually discovers it through mDNS; if `adb devices -l` remains empty, connect it:
+
+```bash
+adb connect WATCH_IP:DEBUG_PORT
+adb devices -l
+```
+
+Both ports can change. The computer and watch must be on the same Wi-Fi network. Turn
+off ADB debugging and Wireless debugging when finished because they consume watch battery.
+
 ## Windows: "running scripts is disabled on this system"
 
 ```powershell
@@ -52,7 +72,7 @@ You are probably running `adb.exe` by double-clicking. Always run the script fro
 PowerShell window in the repo folder:
 
 ```powershell
-cd path\to\tab-s10-fe-optimiser
+cd path\to\universal-samsung-optimiser
 .\run.ps1 --report
 ```
 
@@ -95,6 +115,9 @@ adb shell pm install-existing --user 10 <package>
 
 ## `min_refresh_rate` does not stick
 
+This section is tablet-only. The Watch6 panel is fixed at 60 Hz and the watch profile
+never writes a refresh-rate override.
+
 Some One UI builds reset it when the display mode changes. Re-run the profile, or set
 it manually:
 
@@ -108,6 +131,9 @@ adb shell settings put system min_refresh_rate 90
 adb devices
 ./run.sh balanced --serial R5GYA1B2C3D
 ```
+
+Wireless devices may appear as an mDNS service name rather than `IP:port`; copy the
+identifier exactly from the first column of `adb devices -l`.
 
 ## The script asks about users
 

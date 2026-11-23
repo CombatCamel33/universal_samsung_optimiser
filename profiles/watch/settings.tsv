@@ -1,0 +1,10 @@
+# tier	namespace	key	value	note
+# --------------------------------------------------------------------------------------------------------------------
+# Watch-safe settings only. The tablet's 90 Hz display and Samsung CPU-performance overrides are never applied here.
+
+# ---------------------------------------------------------------- TIER 1: responsiveness and idle efficiency
+1	global	window_animation_scale	0.5	Halve window-open animation duration without disabling animations completely
+1	global	transition_animation_scale	0.5	Halve screen and app transition animation duration
+1	global	animator_duration_scale	0.5	Halve in-app animator duration for a more responsive interface
+1	global	cached_apps_freezer	enabled	Freeze cached background apps so they cannot consume CPU while idle
+1	system	accessibility_reduce_transparency	1	Enable Reduce transparency and blur to lower UI compositing overhead

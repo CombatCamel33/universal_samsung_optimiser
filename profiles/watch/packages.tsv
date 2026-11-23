@@ -1,0 +1,64 @@
+# tier	package	category	what it is / why it can go	action
+# --------------------------------------------------------------------------------------------------------------------
+# Galaxy Watch / Wear OS profile. Every target is uninstalled. System-image APKs remain restorable with
+# pm install-existing; /data-installed apps lose their APK and data and must be reinstalled from a store.
+#
+# tier 1 = light      (retail demo, certification shims, factory-only test tools, quality telemetry)
+# tier 2 = balanced   (adds Bixby, Samsung Pay, Customization Service and optional provisioning)
+# tier 3 = aggressive (adds Google Assistant/Gemini, Google Wallet and optional apps)
+#
+# Deliberately kept in every tier: Samsung/Google Health, sleep tracking, calls, contacts and Google Messages,
+# emergency/SOS, Find My Watch, NFC, Play/Galaxy Store, OTA updates,
+# phone connectivity, tiles/complications, keyboards, setup/migration, and all core stock watch faces.
+# Balanced keeps Google Wallet; aggressive removes both wallet clients but leaves NFC itself installed.
+# Aggressive also uninstalls the promotional Samsung Global Goals face companions listed below.
+
+# ---------------------------------------------------------------- TIER 1: retail, certification & factory leftovers
+1	com.google.android.apps.wearable.retailattractloop	Wear OS	Retail-store demo loop; has no purpose on a personally owned watch	uninstall
+1	com.android.cts.ctsshim	AOSP	Compatibility Test Suite shim used only during device certification	uninstall
+1	com.android.cts.priv.ctsshim	AOSP	Privileged Compatibility Test Suite shim used only during certification	uninstall
+1	com.sec.android.app.hwmoduletest	Factory	Hidden Samsung hardware-module test interface	uninstall
+1	com.sec.android.app.servicemodeapp	Factory	Hidden service-mode application used by repair technicians	uninstall
+1	com.sec.android.app.wlantest	Factory	Factory Wi-Fi test harness	uninstall
+1	com.sem.factoryapp	Factory	Samsung manufacturing test application	uninstall
+1	com.sec.android.app.factorykeystring	Factory	Factory key-code and engineering-menu handler	uninstall
+1	com.sec.facatfunction	Factory	Factory AT-command handler; not needed during normal use	uninstall
+1	com.sec.hiddenmenu	Factory	Hidden factory/engineering menu	uninstall
+1	com.sec.android.app.felicatest	Factory	Factory FeliCa/NFC test application	uninstall
+1	com.sec.nfc.felicalocktest	Factory	Factory FeliCa lock test application	uninstall
+1	com.samsung.android.aircommandmanager	Factory	Factory Air Command stub; Galaxy Watches have no S Pen	uninstall
+1	com.samsung.android.dqagent	Samsung	Device Quality Agent telemetry and diagnostic upload jobs	uninstall
+
+# ---------------------------------------------------------------- TIER 2: background features you may not use
+2	com.samsung.android.bixby.agent	Samsung	Bixby assistant; Google Assistant remains installed	uninstall
+2	com.samsung.android.bixby.wakeup	Samsung	Bixby wake-word and hardware-key listener	uninstall
+2	com.samsung.android.intellivoiceservice	Samsung	Samsung/Bixby intelligent voice service	uninstall
+2	com.samsung.android.samsungpay.gear	Samsung	Samsung Pay watch client; balanced keeps Google Wallet as the only wallet	uninstall
+2	com.samsung.android.watch.runestone.app	Samsung	Customization Service; collects usage context for personalised recommendations	uninstall
+2	com.samsung.android.watch.selfdiagnostics	Samsung	User-facing Samsung Members self-diagnostics tool	uninstall
+2	com.google.android.partnersetup	Google	Partner preload provisioning used during initial setup	uninstall
+2	com.android.managedprovisioning	AOSP	Work/enterprise device provisioning; keep it if this watch is organisation-managed	uninstall
+2	com.sds.emm.cloud.knox.samsung	Knox	Knox Manage enterprise enrolment client; keep it on a managed work watch	uninstall
+
+# ---------------------------------------------------------------- TIER 3: optional and duplicate user-facing apps
+3	com.google.android.wearable.assistant	Google	Google Assistant / Gemini for Wear OS	uninstall
+3	com.google.android.apps.walletnfcrel	Google	Google Wallet; NFC infrastructure remains installed	uninstall
+3	com.samsung.sree	Samsung	Samsung Global Goals application	uninstall
+3	com.samsung.sree.spin	Samsung	Samsung Global Goals Spin watch face companion	uninstall
+3	com.samsung.sree.digital	Samsung	Samsung Global Goals Digital watch face companion	uninstall
+3	com.samsung.sree.classic	Samsung	Samsung Global Goals Classic watch face companion	uninstall
+3	com.samsung.sree.countdown	Samsung	Samsung Global Goals Countdown watch face companion	uninstall
+3	com.microsoft.office.outlook	Microsoft	Outlook watch client; remove only if you do not use Outlook notifications/mail	uninstall
+3	com.sec.android.app.sbrowser	Samsung	Samsung Internet browser for Wear OS	uninstall
+3	com.samsung.android.oneconnect	Samsung	SmartThings watch application and device controls	uninstall
+3	com.samsung.android.watch.budscontroller	Samsung	Galaxy Buds controller; keep it if you control Buds from the watch	uninstall
+3	com.samsung.android.app.reminder	Samsung	Samsung Reminder watch application	uninstall
+3	com.samsung.android.wear.voicerecorder	Samsung	Voice Recorder watch application	uninstall
+3	com.samsung.android.wearable.music	Samsung	Samsung Music player on the watch	uninstall
+3	com.samsung.android.wear.musictransfer	Samsung	Phone-to-watch music transfer service	uninstall
+3	com.samsung.android.video.wearable	Samsung	Samsung wearable video player	uninstall
+3	com.samsung.android.gallery.watch	Samsung	Gallery viewer on the watch	uninstall
+3	com.samsung.android.watch.cameracontroller	Samsung	Remote camera viewfinder/controller for Galaxy phones	uninstall
+3	com.samsung.android.watch.worldclock	Samsung	World Clock watch application	uninstall
+3	com.samsung.android.watch.compass	Samsung	Compass watch application	uninstall
+3	com.samsung.android.messaging	Samsung	Samsung Messages companion; Google Messages remains installed	uninstall

@@ -1,11 +1,16 @@
 # Universal Samsung Optimiser
 
 One-command, **fully reversible**, device-aware ADB optimiser for the Samsung Galaxy
-Tab S10 FE+ and Galaxy Watch6.
+Tab S10 FE+, Galaxy phones and Galaxy Watch6.
 
 It detects tablets versus Wear OS watches before loading a profile, removes background
 bloat, shortens sluggish animations, and tunes each device with settings that are valid
 for its hardware. Works on **macOS, Windows and Linux**. No root or custom ROM.
+
+Teams, Samsung Internet, the Microsoft Office apps, Gmail, Messages and the
+phone/telephony services are **kept on every tablet or phone by default** - a connected phone
+stays a phone
+(see [Keeping apps on a phone](#keeping-apps-on-a-phone-teams-samsung-internet-office-gmail-messages-phone)).
 
 ```bash
 ./run.sh balanced      # macOS / Linux
@@ -65,15 +70,19 @@ and the full aggressive profile were validated on this device. The watch has a s
 package/settings profile; the tablet's 90 Hz and CPU-performance overrides can never be
 selected for it.
 
-The tablet profile still only touches packages that exist on the target, so it also works
-on the S10 FE, S9 FE, and Tab S9/S10 series. Use extra care on phones: the tablet's
-aggressive tier intentionally removes its telephony stack.
+The tablet/phone profile still only touches packages that exist on the target, so it also
+works on the S10 FE, S9 FE, and Tab S9/S10 series. Its full aggressive list contains the
+telephony stack, but the default `phoning` keep group protects it on a phone; only
+`--no-keep` opts back into removing those packages.
 
 ## Results on the test tablet
 
-Measured on a real SM-X620 after each profile and a reboot:
+Measured on a real SM-X620 after each profile and a reboot. The aggressive column is the
+original list (`aggressive --no-keep` today); the default keep list protects Teams, Office,
+Samsung Internet, Gmail, Messages and the phone, so a default aggressive run removes
+roughly 30 fewer packages and keeps a little more of the storage/RAM in use.
 
-| Metric | Before | `balanced` | `aggressive` |
+| Metric | Before | `balanced` | `aggressive --no-keep` |
 |---|---|---|---|
 | Installed packages (user 10) | 515 | 409 | **359** |
 | Installed packages (user 0) | 443 | 336 | **290** |
@@ -86,13 +95,46 @@ Measured on a real SM-X620 after each profile and a reboot:
 | Background Wi-Fi/BLE scanning | on | off | **off** |
 | Samsung telemetry agents | 5 running | 0 | **0** |
 
-`aggressive` additionally deletes the `/data` preloads outright, which is where most of
-the extra storage comes from (Office, Teams, Samsung Notes, Samsung Internet...).
+`aggressive --no-keep` additionally deletes the `/data` preloads outright, which is where
+most of the extra storage comes from (Office, Teams, Samsung Notes, Samsung Internet...).
+With the default keep list those preloads stay installed.
 
 RAM numbers move around with what you have open — the point is that ~155 packages no
 longer start at boot. Galaxy Store, Device Care, face unlock, DeX, Smart View and
-second-screen mode are kept on purpose, which is why aggressive removes ~156 rather than 175. After the aggressive run the only things left in the top RAM list
-were the launcher, System UI, Play Services and the keyboard.
+second-screen mode are kept on purpose, which is why `--no-keep` removes ~156 rather than
+175. After the aggressive run the only things left in the top RAM list were the launcher,
+System UI, Play Services and the keyboard.
+
+## Results on a Galaxy M23 5G (real run)
+
+Applied on 23 Nov 2026 to `SM-M236B` (Android 14, One UI 6.1, 4 GB RAM), user 0 only:
+
+```bash
+./run.sh aggressive --keep teams,samsung-internet,office,gmail,messages,phoning \
+  --user 0 --disable-preloads --trim --no-settings --reboot
+```
+
+`--no-settings` was used deliberately: the generic profile targets a 90 Hz tablet panel and
+0.5x animations, while this phone was already on 120 Hz adaptive and 0x animations, so
+leaving Android settings alone preserved both. `--disable-preloads` keeps Drive, Photos and
+Samsung Notes recoverable, and `--user 0` leaves Secure Folder (user 150) untouched.
+
+| Metric | Before | After | Change |
+|---|---|---|---|
+| Installed packages (user 0) | 495 | 400 | **-95** |
+| Disabled packages (user 0) | 33 | 35 | +2 |
+| Available RAM (`MemAvailable`) | 0.5 GB | 0.8 GB | +0.2 GB |
+| Free RAM | 0.2 GB | 0.2 GB | 0.0 GB |
+| Storage used / free | 79.6 GB / 28.5 GB | 68.5 GB / 39.6 GB | **-11.1 GB / +11.1 GB** |
+| Refresh rate | 120 Hz adaptive | 120 Hz adaptive | unchanged |
+
+Samsung Messages was removed only after Google Messages was confirmed as the default SMS
+app. Gmail, Google Messages/MMS, Teams, Samsung Internet, Word/Outlook/OneDrive, the
+dialer, in-call UI, IMS/VoLTE, SIM UI and Emergency SOS all remained installed and enabled.
+Knox, Secure Folder, the OTA updater and the Samsung account were untouched (no
+`--extras`), and all 43 protected packages that existed before the run were still present
+after the reboot. Figures come from
+`backups/20261123-131937/stats-before.tsv` and `stats-after.tsv`.
 
 ## Requirements
 
@@ -153,11 +195,11 @@ Every profile is cumulative: `balanced` includes `light`, `aggressive` includes 
 |---|---|---|
 | `light` | 30 | Pure telemetry, diagnostics, factory test apps, AR-emoji toys, the preloaded Asphalt demo, duplicate CTS shims |
 | `balanced` | 110 | + Bixby, Samsung Customization/Context services, Device Security (McAfee), Edge panels, Modes & Routines, Digital Wellbeing, Game Optimizing Service, 18 Samsung TTS language packs, ARCore, Link-to-Windows |
-| `aggressive` | 163 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Samsung Pass/Cloud, SmartThings, telephony stack (Wi-Fi-only tablet) |
+| `aggressive` | 164 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Samsung Pass/Cloud, SmartThings, telephony stack. **Teams, Samsung Internet, Office, Gmail, Messages and phone services are kept by default** |
 | `--extras` | +17 | Knox/Secure Folder, OTA updater, Samsung account. **Opt-in only** — breaks Secure Folder and security updates |
 | `--disable-preloads` | flag | Hides `/data`-installed preloads instead of deleting them, so they stay restorable |
 
-`light` is safe for anyone. `balanced` is what I run daily. `aggressive` is for a tablet used as a browser + media device.
+`light` is safe for anyone. `balanced` is what I run daily. `aggressive` is for a tablet or phone used as a browser + media device. The 164 count is the full `--no-keep` list; with the default keep list about 30 of those packages are reported as `(kept)` and skipped.
 
 ### Galaxy Watch profiles
 
@@ -178,30 +220,73 @@ Google Play Store and Galaxy Store are hard-protected in every watch tier.
 
 Full explanations: **[tablet tweaks](docs/TWEAKS.md)** · **[Galaxy Watch profiles](docs/WATCH.md)**.
 
+## Keeping apps on a phone (Teams, Samsung Internet, Office, Gmail, Messages, phone)
+
+The repo was written for a Wi-Fi-only tablet, but it is safe on a phone because a
+**keep list** in [`profiles/keep.tsv`](profiles/keep.tsv) always wins. These groups are
+kept by default on whichever tablet or phone is connected:
+
+| Group | Keeps |
+|---|---|
+| `teams` | Microsoft Teams |
+| `samsung-internet` | Samsung Internet browser |
+| `office` | Word, Excel, PowerPoint, OneNote, Outlook, the unified Microsoft 365 app and OneDrive |
+| `gmail` | Gmail |
+| `messages` | Google Messages, MMS and Message Guard (Samsung Messages is removed by `aggressive`) |
+| `phoning` | Dialer, in-call UI, telephony settings, call assistant, Smart Call, Emergency SOS, IMS/VoLTE/Wi-Fi calling, RCS/Carrier Services, call continuity, call-log backup, SIM and carrier configuration |
+
+Before using `aggressive` on a phone, confirm Google Messages is installed and selected as
+the default SMS app. Samsung Messages is intentionally not in the keep list.
+
+Kept packages are reported as `(kept)` in the run output and are never uninstalled or
+disabled. Because they are not touched, the phone keeps calling, texting, Teams, Office,
+Gmail and Samsung Internet working after any profile.
+
+Choose only some groups, add groups, or opt out completely:
+
+```bash
+./run.sh aggressive --keep phoning,messages,teams   # keep just these
+./run.sh aggressive --keep office                  # one group (repeatable)
+./run.sh aggressive --no-keep                      # old behaviour: remove everything
+./run.sh --list-keep                               # show every group + package
+```
+
+On Windows use `-Keep phoning,messages,teams`, `-NoKeep`, `-ListKeep` and `-NoSettings`.
+Watch profiles use their own safety rules and ignore the tablet/phone keep list.
+
+Packages that are already removed stay removed - run `--restore` first, then re-apply the
+profile. A package that does not exist on your model is ignored, and you can add other
+package names to `profiles/keep.tsv` if your build uses a different one.
+
 ## What tablet `aggressive` removes - and what stops working
 
-`aggressive` is meant for a tablet used as a browser + media device. It removes whole
-apps, not just background services, so read this before running it.
+`aggressive` is meant for a tablet or phone used as a browser + media device. It removes
+whole apps, not just background services, so read this before running it. The
+[keep list](#keeping-apps-on-a-phone-teams-samsung-internet-office-gmail-messages-phone) means
+the Teams / Samsung Internet / Office / Gmail / Messages / phone rows below are **not** removed
+unless you pass `--no-keep`.
 
 **Removed app groups**
 
 | Group | Apps |
 |---|---|
-| Browsers | Chrome, Samsung Internet (keep Brave/Firefox/whatever you installed) |
-| Google | YouTube, YouTube Music, Drive, Docs, Google app (Search/Discover/Assistant), Maps, Gmail, Photos, Messages, Meet, Gemini, Voice Access, print spooler |
-| Microsoft | Word, Excel, PowerPoint, OneNote, Outlook, Teams, OneDrive - **APK and data** |
-| Samsung | Notes, Reminder, Studio video editor, Samsung Pass + autofill, Samsung Cloud, Samsung Kids, SmartThings, Find, Photo Remaster |
-| Telephony | Dialer, in-call UI, telephony UI, call assistant, smart call, Emergency SOS, IMS/VoLTE, MMS, SIM dialogs |
+| Browsers | Chrome, Samsung Internet *(kept by default)* |
+| Google | YouTube, YouTube Music, Drive, Docs, Google app (Search/Discover/Assistant), Maps, Photos, Meet, Gemini, Voice Access, print spooler. **Gmail and Google Messages are kept by default** |
+| Microsoft | Word, Excel, PowerPoint, OneNote, Outlook, Teams, OneDrive - all **kept by default**; `--no-keep` deletes APK and data |
+| Samsung | Samsung Messages, Notes, Reminder, Studio video editor, Samsung Pass + autofill, Samsung Cloud, Samsung Kids, SmartThings, Find, Photo Remaster |
+| Telephony | Dialer, in-call UI, telephony UI, call assistant, smart call, Emergency SOS, IMS/VoLTE, MMS, SIM dialogs and carrier configuration - **kept by default** |
 
 **What stops working**
 
-- No built-in browser, YouTube, YouTube Music, Drive, Docs, Gmail, Maps, Photos or
+- No Chrome, YouTube, YouTube Music, Drive, Docs, Maps, Photos or
   Google Assistant/Discover (Morphe/ReVanced YouTube and YouTube Music keep working if
-  you have them installed).
+  you have them installed). Samsung Internet and Gmail stay installed by default.
 - No Studio video editor.
 - **Samsung Notes is deleted together with its local notes** - back it up first.
 - No Samsung Pass autofill.
-- No dialer or Emergency SOS (the Wi-Fi-only tablet has no SIM anyway).
+- Nothing telephony-related: with the default keep list the dialer, messages, IMS/VoLTE
+  and Emergency SOS stay installed. Passing `--no-keep` removes them, which is only
+  sensible on a Wi-Fi-only tablet.
 
 Every app listed above can be reinstalled by hand from **Galaxy Store** or **Play Store**
 whenever you want it back - see [Reinstalling an app you actually want](#reinstalling-an-app-you-actually-want).
@@ -211,18 +296,20 @@ whenever you want it back - see [Reinstalling an app you actually want](#reinsta
 Camera, Gallery, My Files, Clock, Calculator, Contacts, Calendar, Settings, Samsung
 keyboard, the launcher, Play Store, **Galaxy Store**, **Device Care**, Google Play
 Services, S Pen / Air Command, Quick Share, Good Lock, **face unlock**,
-**Smart View / casting**, **DeX**, **second-screen mode** and **Multi Control**, and
-**Secure Folder** (user 150 is never touched).
+**Smart View / casting**, **DeX**, **second-screen mode** and **Multi Control**,
+**Secure Folder** (user 150 is never touched), plus **Teams, Samsung Internet, Office,
+Gmail, Messages and the phone app** through the default keep list.
 
 Samsung's whole continuity stack (`mdx`, `mcf*`, `secondscreen`, `hwresourceshare`,
 `smartmirroring`) is deliberately left alone - it is what makes DeX, Smart View and
 second-screen mode work.
 
-Everything above is restorable with `./run.sh --restore` **except** the `/data`-installed
-preloads (Office, Samsung Notes, Samsung Internet, Reminder, YouTube Music, Drive, Docs),
-whose APK and data are deleted by design - reinstall those from the Play Store or Galaxy
-Store. Studio, YouTube and everything else in the list are system apps, so `--restore`
-brings them back untouched.
+Everything that is actually removed is restorable with `./run.sh --restore` **except**
+the `/data`-installed preloads (Office, Samsung Notes, Samsung Internet, Reminder, YouTube
+Music, Drive, Docs), whose APK and data are deleted by design when they are not kept -
+reinstall those from the Play Store or Galaxy Store. Studio, YouTube and everything else
+in the list are system apps, so `--restore` brings them back untouched. Office and Samsung
+Internet keep their data by default because they are never removed.
 
 One package is not in any profile on purpose: `com.samsung.android.fmm` (Find My Mobile).
 Samsung blocks both `pm uninstall` and `pm disable-user` on it, so it can only be removed
@@ -277,6 +364,19 @@ reboot before making a stable comparison.
 
 Dry runs capture and print only the current baseline—nothing is written to `backups/`.
 
+The numbers are saved as `stats-before.tsv` and `stats-after.tsv` in the run's backup
+folder, so they can be reprinted at any time - no device needed:
+
+```bash
+./run.sh --compare                              # most recent run
+./run.sh --compare backups/20261123-104500      # a specific run
+```
+
+On Windows: `.\run.ps1 -Compare` or `.\run.ps1 -Compare backups\20261123-104500`.
+
+The same capture runs on phones and tablets, for every real user profile. RAM changes with
+what is open at the moment, so package counts and storage are the reliable numbers.
+
 ## System tweaks
 
 The animation/freezer settings apply to both device families. Reduce transparency and
@@ -320,7 +420,12 @@ must be downloaded again; use `--disable-preloads` to disable and preserve them 
 backups/
 ├── applied.tsv              every package action ever taken (user, package, action)
 ├── original-settings.tsv    the original value of every setting touched
-├── 20261122-102849/         tablet run: manifests + before.txt / after.txt
+├── 20261122-102849/         one folder per tablet/phone run:
+│   ├── info.txt             device, profile, keep groups
+│   ├── packages.tsv         that run's package changes
+│   ├── settings.tsv         that run's setting changes
+│   ├── stats-before.tsv     device statistics before the run
+│   └── stats-after.tsv      device statistics after the run
 └── watch-SM-R930-…/         isolated per-watch history
     ├── applied.tsv
     ├── original-settings.tsv
@@ -357,14 +462,22 @@ Use `--disable-preloads` if you want those to stay restorable.
 --dry-run        show every action without changing anything
 --user 10        only touch one Android user (repeatable)
 --all-users      every real user profile (default)
+--keep <groups>  keep app groups (default: teams,samsung-internet,office,gmail,messages,phoning)
+--no-keep        remove every listed package, including the default keep groups
+--list-keep      print the keep groups and their packages
+--no-settings    remove/disable packages only; leave Android settings untouched
 --trim           clear app caches (pm trim-caches)
 --dexopt         run a background dexopt job now (slow, speeds up app start-up)
 --reboot         reboot when finished
 --yes, -y        skip the confirmation prompt
 --list           print every package in every profile
 --report         device info, RAM, storage, top RAM consumers
+--compare [dir]  before/after statistics for a run (default: the latest)
 --serial <id>    pick a device when several are connected
 ```
+
+On Windows the equivalents are `-Keep`, `-NoKeep`, `-ListKeep`, `-NoSettings`, `-Compare`,
+`-List`, `-Report`, `-User`, `-Serial`, `-Trim`, `-Dexopt`, `-Reboot` and `-Yes`.
 
 Multi-user tablets: by default every real user profile is debloated, but **Secure Folder (user 150) is always skipped**. Use `--user 10` to limit it to one profile.
 
@@ -377,6 +490,7 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 - **Protected-package blocklist** refuses to touch core Android packages. On watches it
   additionally protects both System UIs, Wear Services, phone pairing/transport, tiles,
   health services, calls, safety/SOS, Find My Watch, NFC, stores and the Samsung account.
+- **Keep list on by default** - Teams, Samsung Internet, Office, Gmail, Messages and the phone/telephony stack are never removed unless you explicitly pass `--no-keep`.
 - **Idempotent.** Running a profile twice does nothing the second time.
 - **No OTA or Knox changes** unless you pass `--extras`.
 - The worst realistic outcome is an app you wanted disappearing from the launcher — `--restore` brings it back in seconds.
@@ -392,6 +506,7 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 ├── profiles/
 │   ├── packages.tsv          tier, package, category, explanation
 │   ├── settings.tsv          tier, namespace, key, value, explanation
+│   ├── keep.tsv              app groups that are never removed (default: all)
 │   ├── extras.tsv            opt-in Knox / OTA / Samsung account
 │   └── watch/                device-specific packages, settings and extras
 ├── docs/
@@ -402,8 +517,9 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 └── backups/                  generated at run time (git-ignored)
 ```
 
-Want to add or drop a package? Edit `profiles/packages.tsv` for tablets or
+Want to add or drop a package? Edit `profiles/packages.tsv` for tablets and phones or
 `profiles/watch/packages.tsv` for watches, then run `python3 tools/generate-docs.py`.
+Want an app to survive every profile? Add it to a group in `profiles/keep.tsv`.
 
 ## Contributing
 

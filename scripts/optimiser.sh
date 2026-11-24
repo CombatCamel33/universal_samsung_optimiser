@@ -12,7 +12,7 @@
 #
 set -u
 
-VERSION="1.3.0"
+VERSION="1.3.1"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILES="$ROOT/profiles"
 BACKUP_ROOT="$ROOT/backups"
@@ -52,8 +52,10 @@ DISABLE_PRELOADS=0
 WANT_TRIM=0
 WANT_DEXOPT=0
 WANT_REBOOT=0
-MODE="apply"          # apply | restore | restore-all | list | report
+APPLY_SETTINGS=1
+MODE="apply"          # apply | restore | restore-all | list | report | compare
 RESTORE_DIR=""
+COMPARE_DIR=""
 USER_LIST=""
 SERIAL=""
 DEVICE_CLASS="tablet"
@@ -62,6 +64,11 @@ CHARACTERISTICS=""
 HARDWARE_ID=""
 WATCH_FEATURE="false"
 
+# App groups that are never removed. Works on tablets and phones alike.
+KEEP_DEFAULT="teams,samsung-internet,office,gmail,messages,phoning"
+KEEP_GROUPS="$KEEP_DEFAULT"
+KEEP_EXPLICIT=0
+
 usage() {
   cat <<EOF
 ${C_BOLD}Universal Samsung Optimiser${C_RESET} v$VERSION
@@ -69,11 +76,12 @@ ${C_BOLD}Universal Samsung Optimiser${C_RESET} v$VERSION
   ./run.sh <profile> [options]      apply a profile
   ./run.sh --restore [dir]          undo every change (or restore one backup dir)
   ./run.sh --restore-all            reinstall every package in every profile
+  ./run.sh --compare [dir]          show the before/after statistics of a run
 
 ${C_BOLD}Profiles${C_RESET}
   light         safest telemetry, diagnostics and factory leftovers
   balanced      + optional Samsung/Google background features
-  aggressive    + replaceable user-facing apps
+  aggressive    + replaceable user-facing apps (Teams/Gmail/Office/phone kept)
 
   A Galaxy Watch is detected automatically and uses its own conservative,
   device-tested package list. Run --list to see both device families.
@@ -86,13 +94,21 @@ ${C_BOLD}Options${C_RESET}
   --extras           device-specific high-risk removals (read --list first)
   --disable-preloads hide /data-installed preloads instead of deleting them
                      (Office, Notes, Samsung Internet... stay on disk, restorable)
+  --keep <groups>    keep these app groups installed (default: all of them)
+                     groups: teams, samsung-internet, office, gmail, messages, phoning
+                     repeatable, or comma-separated; "none" disables keeping
+  --no-keep          original aggressive behaviour - remove every listed package
+  --list-keep        print the keep groups and their packages
   --trim             clear app caches (pm trim-caches)
   --dexopt           run a background dexopt job now (slow, optimises app start-up)
   --reboot           reboot when finished
+  --no-settings      remove/disable packages only; do not change Android settings
   --yes, -y          do not ask for confirmation
   --list             print the package lists
   --report           print device info, RAM and storage
   --serial <id>      target a specific device when several are attached
+  --compare [dir]    compare the statistics captured before/after a run
+                     (default: the most recent backup)
   --help, -h         this text
   --version          print version
 
@@ -231,6 +247,56 @@ profile_tier() {
     aggressive) echo 3 ;;
     *)          return 1 ;;
   esac
+}
+
+# ------------------------------------------------------------------ keep groups
+keep_group_names() {
+  printf '%s\n' teams samsung-internet office gmail messages phoning
+}
+
+is_keep_group() {
+  case "$1" in
+    teams|samsung-internet|office|gmail|messages|phoning) return 0 ;;
+  esac
+  return 1
+}
+
+keep_words() { # normalise KEEP_GROUPS to a space-separated list
+  printf '%s\n' "$KEEP_GROUPS" | tr ',' ' ' | tr -s ' ' '\n' | sed '/^$/d'
+}
+
+# keep_packages -> package names for every enabled group (from profiles/keep.tsv)
+keep_packages() {
+  local file="$PROFILES/keep.tsv" g
+  [ -f "$file" ] || return 0
+  for g in $(keep_words); do
+    awk -F'\t' -v g="$g" '
+      { sub(/\r$/, "") }
+      /^[[:space:]]*#/ { next }
+      NF >= 3 && $1 == g { print $2 }
+    ' "$file"
+  done | sort -u
+}
+
+# add_keep_arg <groups> - first explicit --keep replaces the defaults, later ones add
+add_keep_arg() {
+  local list tok
+  if [ "$KEEP_EXPLICIT" -eq 0 ]; then
+    KEEP_GROUPS=""
+    KEEP_EXPLICIT=1
+  fi
+  list="$(printf '%s' "$1" | tr ',' ' ')"
+  for tok in $list; do
+    [ "$tok" = "none" ] && continue
+    KEEP_GROUPS="${KEEP_GROUPS:+$KEEP_GROUPS,}$tok"
+  done
+}
+
+validate_keep_groups() {
+  local g
+  for g in $(keep_words); do
+    is_keep_group "$g" || die "unknown keep group '$g' (use teams, samsung-internet, office, gmail, messages, phoning or none)"
+  done
 }
 
 # ts_filter <file> <max_tier>  -> prints rows with tier <= max (or all extras rows)
@@ -418,6 +484,105 @@ restore_setting() { # restore_setting <ns> <key> <old>
   fi
 }
 
+# ------------------------------------------------------------------ statistics
+snapshot_stats() { # snapshot_stats <path>  -> key/value TSV for before/after comparisons
+  local out="$1" u line total used free
+  {
+    printf 'key\tvalue\n'
+    printf 'model\t%s\n' "${MODEL:-unknown}"
+    printf 'android\t%s\n' "${RELEASE:-unknown}"
+    printf 'mem_total_kb\t%s\n' "$(adbs "cat /proc/meminfo" | awk '/^MemTotal:/{print $2; exit}')"
+    printf 'mem_free_kb\t%s\n' "$(adbs "cat /proc/meminfo" | awk '/^MemFree:/{print $2; exit}')"
+    printf 'mem_available_kb\t%s\n' "$(adbs "cat /proc/meminfo" | awk '/^MemAvailable:/{print $2; exit}')"
+    line="$(adbs "df -k /data" | tail -1)"
+    total="$(printf '%s\n' "$line" | awk '{print $2}')"
+    used="$(printf '%s\n' "$line" | awk '{print $3}')"
+    free="$(printf '%s\n' "$line" | awk '{print $4}')"
+    printf 'storage_total_kb\t%s\n' "${total:-0}"
+    printf 'storage_used_kb\t%s\n' "${used:-0}"
+    printf 'storage_free_kb\t%s\n' "${free:-0}"
+    for u in $(resolve_users); do
+      printf 'packages.user.%s\t%s\n' "$u" "$(adbs "pm list packages --user $u" | grep -c '^package:')"
+      printf 'disabled.user.%s\t%s\n' "$u" "$(adbs "pm list packages -d --user $u" | grep -c '^package:')"
+    done
+  } > "$out"
+}
+
+show_stats_diff() { # show_stats_diff <before.tsv> <after.tsv>
+  local before="$1" after="$2"
+  if [ ! -f "$before" ]; then
+    warn "no statistics were recorded before this run"
+    return 1
+  fi
+  if [ ! -f "$after" ]; then
+    warn "no statistics were recorded after this run (was the run interrupted?)"
+    return 1
+  fi
+
+  printf '  %-34s %-12s %-12s %s\n' 'Metric' 'Before' 'After' 'Change'
+  awk -F'\t' '
+    function gb(kb) { return sprintf("%.1f GB", kb / 1048576) }
+    function is_kb(k) { return k ~ /_kb$/ }
+    function interesting(k) { return k ~ /_kb$/ || k ~ /^(packages|disabled)\.user\./ }
+    FNR == 1 { next }
+    FNR == NR { b[$1] = $2; next }
+    {
+      a[$1] = $2
+      if (interesting($1) && !($1 in seen)) { seen[$1] = 1; order[++n] = $1 }
+    }
+    END {
+      for (i = 1; i <= n; i++) {
+        key = order[i]
+        av = a[key] + 0
+        bv = (key in b) ? b[key] + 0 : 0
+        d = av - bv
+        if (is_kb(key)) {
+          if (d > -52429 && d < 52429) d = 0
+          bs = gb(bv); as = gb(av)
+          cs = (d > 0 ? "+" : "") sprintf("%.1f GB", d / 1048576)
+        } else {
+          bs = bv ""; as = av ""
+          cs = (d > 0 ? "+" : "") d ""
+        }
+        label = key
+        if (key == "mem_total_kb") label = "Total RAM"
+        else if (key == "mem_available_kb") label = "Available RAM"
+        else if (key == "mem_free_kb") label = "Free RAM"
+        else if (key == "storage_total_kb") label = "Storage total"
+        else if (key == "storage_used_kb") label = "Storage used"
+        else if (key == "storage_free_kb") label = "Storage free"
+        else if (key ~ /^packages\.user\./) {
+          id = key; sub(/^packages\.user\./, "", id)
+          label = "Installed packages (user " id ")"
+        } else if (key ~ /^disabled\.user\./) {
+          id = key; sub(/^disabled\.user\./, "", id)
+          label = "Disabled packages (user " id ")"
+        }
+        printf "  %-34s %-12s %-12s %s\n", label, bs, as, cs
+      }
+    }
+  ' "$before" "$after"
+  dim "  RAM figures move with what is open - package and storage counts are the reliable ones."
+}
+
+do_compare() {
+  local dir="$COMPARE_DIR" stats_before stats_after
+  if [ -z "$dir" ]; then dir="$(latest_backup)"; fi
+  [ -n "$dir" ] || die "no backups found - apply a profile first"
+  [ -d "$dir" ] || die "backup not found: $dir"
+  head1 "Before / after - $(basename "$dir")"
+  if [ -f "$dir/info.txt" ]; then sed 's/^/  /' "$dir/info.txt"; head1 "Statistics"; fi
+  stats_before="$dir/stats-before.tsv"
+  stats_after="$dir/stats-after.tsv"
+  if [ -f "$stats_before" ] && [ -f "$stats_after" ]; then
+    show_stats_diff "$stats_before" "$stats_after"
+  elif [ -f "$dir/before.txt" ] && [ -f "$dir/after.txt" ]; then
+    show_before_after "$dir/before.txt" "$dir/after.txt"
+  else
+    show_stats_diff "$stats_before" "$stats_after"
+  fi
+}
+
 # ------------------------------------------------------------------ report
 do_report() {
   head1 "Device"
@@ -464,6 +629,19 @@ do_report() {
 }
 
 # ------------------------------------------------------------------ list
+do_list_keep() {
+  local g
+  [ -f "$PROFILES/keep.tsv" ] || { warn "keep.tsv not found in $PROFILES"; return 1; }
+  for g in $(keep_group_names); do
+    head1 "$g"
+    awk -F'\t' -v g="$g" '
+      { sub(/\r$/, "") }
+      /^[[:space:]]*#/ { next }
+      NF >= 4 && $1 == g { printf "  %-52s %s\n", $2, $4 }
+    ' "$PROFILES/keep.tsv"
+  done
+}
+
 list_profile_set() {
   local title="$1" dir="$2" t label
   head1 "$title"
@@ -480,12 +658,14 @@ list_profile_set() {
 
 do_list() {
   list_profile_set "Galaxy tablet / Android profiles" "$PROFILES"
+  head1 "keep groups (never removed by a tablet or phone profile)"
+  awk -F'\t' '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=4 {printf "  %-20s %-52s %s\n", $1, $2, $4}' "$PROFILES/keep.tsv"
   list_profile_set "Galaxy Watch / Wear OS profiles" "$PROFILES/watch"
 }
 
 # ------------------------------------------------------------------ backup
 new_backup_dir() {
-  local stamp dir
+  local stamp dir keep_info
   stamp="$(date +%Y%m%d-%H%M%S)"
   dir="$BACKUPS/$stamp"
   mkdir -p "$dir"
@@ -497,11 +677,21 @@ new_backup_dir() {
   : >> "$CUMULATIVE_SET"
   : > "$MANIFEST"
   : > "$SETTINGS_MANIFEST"
+  if [ "$DEVICE_CLASS" = "watch" ]; then
+    keep_info="not-applicable"
+  else
+    keep_info="$(keep_words | tr '\n' ',' | sed 's/,$//')"
+  fi
   {
     echo "Universal Samsung Optimiser v$VERSION"
     echo "date      : $(date)"
     echo "profile   : $PROFILE"
+    echo "keep      : $keep_info"
     echo "extras    : $WANT_EXTRAS"
+    echo "apply-settings : $APPLY_SETTINGS"
+    echo "trim      : $WANT_TRIM"
+    echo "dexopt    : $WANT_DEXOPT"
+    echo "reboot    : $WANT_REBOOT"
     echo "serial    : $SERIAL"
     echo "model     : $MODEL"
     echo "device    : $DEVICE"
@@ -515,7 +705,12 @@ new_backup_dir() {
 }
 
 latest_backup() {
-  ls -1d "$BACKUPS"/*/ 2>/dev/null | sort | tail -1 | sed 's:/*$::'
+  local info dir
+  for info in "$BACKUP_ROOT"/[0-9]*/info.txt "$BACKUP_ROOT"/watch-*/*/info.txt; do
+    [ -f "$info" ] || continue
+    dir="${info%/info.txt}"
+    printf '%s\t%s\n' "${dir##*/}" "$dir"
+  done | sort | tail -1 | cut -f2-
 }
 
 # ------------------------------------------------------------------ before / after snapshots
@@ -594,7 +789,7 @@ show_before_after() { # show_before_after <before-file> <after-file>
 
 # ------------------------------------------------------------------ apply
 do_apply() {
-  local tier users u total=0 rc pkg cat action before_file after_file
+  local tier users u total=0 rc pkg cat action before_file after_file keep_file settings_count
   tier="$(profile_tier "$PROFILE")" || die "unknown profile '$PROFILE' (use light, balanced or aggressive)"
 
   require_device
@@ -605,10 +800,24 @@ do_apply() {
   say "  Target     : $DEVICE_LABEL"
   say "  Profile    : ${C_BOLD}$PROFILE${C_RESET} (tier <= $tier)"
   say "  Packages   : $(count_rows "$PACKAGES_FILE" "$tier")"
-  say "  Settings   : $(awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" | wc -l | tr -d ' ')"
+  settings_count="$(awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" | wc -l | tr -d ' ')"
+  if [ "$APPLY_SETTINGS" -eq 1 ]; then
+    say "  Settings   : $settings_count"
+  else
+    say "  Settings   : skipped ($settings_count profile settings left unchanged)"
+  fi
   say "  Users      : $(printf '%s' "$users" | tr '\n' ' ')"
+  if [ "$DEVICE_CLASS" != "watch" ]; then
+    if [ -n "$KEEP_GROUPS" ]; then
+      say "  Keep       : $(keep_words | tr '\n' ',' | sed 's/,$//') ($(keep_packages | wc -l | tr -d ' ') packages protected)"
+    else
+      say "  Keep       : ${C_YELLOW}none - every package in the profile can be removed${C_RESET}"
+    fi
+  fi
   [ "$WANT_EXTRAS" -eq 1 ] && say "  Extras     : ${C_YELLOW}yes - device-critical optional services will be changed${C_RESET}"
   [ "$DISABLE_PRELOADS" -eq 1 ] && say "  Preloads   : disabled (kept on disk) instead of deleted"
+  [ "$WANT_TRIM" -eq 1 ] && say "  Cache      : trim after package changes"
+  [ "$WANT_REBOOT" -eq 1 ] && say "  Reboot     : yes, after statistics are captured"
   [ "$DRY_RUN" -eq 1 ] && say "  Mode       : ${C_YELLOW}dry run - nothing will change${C_RESET}"
 
   if [ "$DRY_RUN" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
@@ -621,11 +830,20 @@ do_apply() {
     new_backup_dir
     info "Backup written to $LAST_BACKUP"
     before_file="$LAST_BACKUP/before.txt"
+    snapshot_stats "$LAST_BACKUP/stats-before.tsv"
+    ok "baseline statistics captured (before)"
   else
     before_file="$TMP/before.txt"
   fi
   capture_snapshot "$before_file" "$users"
   [ "$DRY_RUN" -eq 1 ] && show_snapshot "Current baseline" "$before_file"
+
+  if [ "$DEVICE_CLASS" != "watch" ]; then
+    keep_packages > "$TMP/keep-packages.txt"
+  else
+    : > "$TMP/keep-packages.txt"
+  fi
+  keep_file="$TMP/keep-packages.txt"
 
   for u in $users; do
     head1 "User $u - $(user_label "$u")"
@@ -638,17 +856,25 @@ do_apply() {
     fi
     while IFS='	' read -r _ pkg cat _note action; do
       [ -z "${pkg:-}" ] && continue
+      if [ -s "$keep_file" ] && grep -qxF "$pkg" "$keep_file"; then
+        printf '    %s= %-46s%s %s (kept)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
+        continue
+      fi
       apply_pkg "$u" "$pkg" "$cat" "${action:-auto}"
       case $? in 0) total=$((total+1)) ;; esac
     done < "$TMP/list.txt"
   done
 
   head1 "System settings"
-  awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" > "$TMP/settings.txt"
-  while IFS='	' read -r _ ns key val note; do
-    [ -z "${ns:-}" ] && continue
-    apply_setting "$ns" "$key" "$val" "$note"
-  done < "$TMP/settings.txt"
+  if [ "$APPLY_SETTINGS" -eq 1 ]; then
+    awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" > "$TMP/settings.txt"
+    while IFS='	' read -r _ ns key val note; do
+      [ -z "${ns:-}" ] && continue
+      apply_setting "$ns" "$key" "$val" "$note"
+    done < "$TMP/settings.txt"
+  else
+    dim "  skipped (package-only mode)"
+  fi
 
   if [ "$WANT_TRIM" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
     head1 "Clearing app caches"
@@ -661,6 +887,11 @@ do_apply() {
     dim "  this can take several minutes..."
     adbs "cmd package bg-dexopt-job" >/dev/null
     ok "dexopt job finished"
+  fi
+
+  if [ "$DRY_RUN" -eq 0 ]; then
+    snapshot_stats "$LAST_BACKUP/stats-after.tsv"
+    ok "statistics captured (after)"
   fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -850,9 +1081,20 @@ while [ $# -gt 0 ]; do
     --yes|-y)    ASSUME_YES=1; shift ;;
     --extras)    WANT_EXTRAS=1; shift ;;
     --disable-preloads) DISABLE_PRELOADS=1; shift ;;
+    --keep)
+      shift
+      [ $# -gt 0 ] || die "--keep needs a group (teams, samsung-internet, office, gmail, messages, phoning or none)"
+      while [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; do
+        case "$1" in light|balanced|aggressive) break ;; esac
+        add_keep_arg "$1"; shift
+      done ;;
+    --keep=*)    add_keep_arg "${1#*=}"; shift ;;
+    --no-keep)   KEEP_GROUPS=""; KEEP_EXPLICIT=1; shift ;;
+    --list-keep) MODE="list-keep"; shift ;;
     --trim)      WANT_TRIM=1; shift ;;
     --dexopt)    WANT_DEXOPT=1; shift ;;
     --reboot)    WANT_REBOOT=1; shift ;;
+    --no-settings) APPLY_SETTINGS=0; shift ;;
     --user)      USER_LIST="$USER_LIST ${2:-}"; shift 2 ;;
     --user=*)    USER_LIST="$USER_LIST ${1#*=}"; shift ;;
     --all-users) USER_LIST=""; shift ;;
@@ -863,6 +1105,11 @@ while [ $# -gt 0 ]; do
       if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then RESTORE_DIR="$2"; shift; fi
       shift ;;
     --restore-all) MODE="restore-all"; shift ;;
+    --compare)
+      MODE="compare"
+      if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then COMPARE_DIR="$2"; shift; fi
+      shift ;;
+    --compare=*) MODE="compare"; COMPARE_DIR="${1#*=}"; shift ;;
     --list)      MODE="list"; shift ;;
     --report)    MODE="report"; shift ;;
     --help|-h)   usage; exit 0 ;;
@@ -874,11 +1121,15 @@ done
 # normalise user list
 USER_LIST="$(printf '%s\n' $USER_LIST | grep -v '^$' | tr '\n' ' ' | sed 's/ *$//')"
 
+validate_keep_groups
+
 TMP="$(mktemp -d 2>/dev/null || mktemp -d -t samsungopt)"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 case "$MODE" in
   list)        do_list; exit 0 ;;
+  list-keep)   do_list_keep; exit 0 ;;
+  compare)     do_compare; exit 0 ;;
   report)      require_device; do_report; exit 0 ;;
   restore)     do_restore; exit 0 ;;
   restore-all) do_restore_all; exit 0 ;;
@@ -897,12 +1148,13 @@ if [ -z "$PROFILE" ]; then
   else
     say "  ${C_BOLD}1)${C_RESET} light       - telemetry, diagnostics, AR toys, preloads"
     say "  ${C_BOLD}2)${C_RESET} balanced    - + Bixby, Samsung extras, gaming services, TTS packs"
-    say "  ${C_BOLD}3)${C_RESET} aggressive  - + browsers, Office, YouTube, Samsung account apps"
+    say "  ${C_BOLD}3)${C_RESET} aggressive  - + browsers, YouTube, Samsung account apps (Teams/Gmail/Office/phone kept)"
   fi
   say "  ${C_BOLD}4)${C_RESET} restore     - undo the last run"
   say "  ${C_BOLD}5)${C_RESET} report      - show device info without changing anything"
+  say "  ${C_BOLD}6)${C_RESET} compare     - before/after statistics of the last run"
   say "  ${C_BOLD}q)${C_RESET} quit"
-  printf '\n  Choose [1-5/q]: '
+  printf '\n  Choose [1-6/q]: '
   read -r choice
   case "$choice" in
     1) PROFILE=light ;;
@@ -910,6 +1162,7 @@ if [ -z "$PROFILE" ]; then
     3) PROFILE=aggressive ;;
     4) do_restore; exit 0 ;;
     5) do_report; exit 0 ;;
+    6) do_compare; exit 0 ;;
     *) say "  bye."; exit 0 ;;
   esac
 fi

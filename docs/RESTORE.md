@@ -29,12 +29,14 @@ adb reboot
 
 ## 2. Undo one specific run
 
-Each run also writes its own folder:
+Each run also writes its own folder, including `stats-before.tsv` / `stats-after.tsv`
+(the device numbers before and after that run):
 
 ```bash
 ls backups/
 # 20261122-102743  20261122-102828  20261122-102849
 ./run.sh --restore backups/20261122-102849
+./run.sh --compare backups/20261122-102849   # before/after statistics
 
 # Watch histories are isolated by hardware id:
 ./run.sh --restore backups/watch-SM-R930-.../20261123-120000
@@ -120,14 +122,18 @@ Real examples from a Galaxy Tab S10 FE+ (Android 16):
 
 | Package | APK location | Default | With `--disable-preloads` |
 |---|---|---|---|
-| `com.microsoft.office.word` | `/data/app/~~duG82SZdq1_3U6G_f7mn7w==/.../base.apk` | APK + data deleted | disabled |
-| `com.microsoft.office.excel` | `/data/app/~~VyE9HeGSP9YgrE7L-9ZRiA==/.../base.apk` | APK + data deleted | disabled |
-| `com.microsoft.teams` | `/data/app/~~ZvIH_3AsYNshnhSQ2fSLvg==/.../base.apk` | APK + data deleted | disabled |
+| `com.microsoft.office.word` | `/data/app/~~duG82SZdq1_3U6G_f7mn7w==/.../base.apk` | **kept** (deleted with `--no-keep`) | **kept** (`--no-keep`: disabled) |
+| `com.microsoft.office.excel` | `/data/app/~~VyE9HeGSP9YgrE7L-9ZRiA==/.../base.apk` | **kept** (deleted with `--no-keep`) | **kept** (`--no-keep`: disabled) |
+| `com.microsoft.teams` | `/data/app/~~ZvIH_3AsYNshnhSQ2fSLvg==/.../base.apk` | **kept** (deleted with `--no-keep`) | **kept** (`--no-keep`: disabled) |
 | `com.samsung.android.app.notes` | `/data/app/~~YGHjeOYI23jGAPqDKhLaAA==/.../base.apk` | APK + data deleted | disabled |
 | `com.samsung.android.app.reminder` | `/data/app/~~ZSRowudJRoapTgWUpt2gDw==/.../base.apk` | APK + data deleted | disabled |
-| `com.sec.android.app.sbrowser` | `/data/app/~~TlWrT3SXNB-W8ZzlGzgnuA==/.../base.apk` | APK + data deleted | disabled |
+| `com.sec.android.app.sbrowser` | `/data/app/~~TlWrT3SXNB-W8ZzlGzgnuA==/.../base.apk` | **kept** (deleted with `--no-keep`) | **kept** (`--no-keep`: disabled) |
 | `com.gameloft.android.ANMP.GloftA9HM` | `/data/app/...` (Asphalt 9 demo) | APK + data deleted | disabled |
 | `com.samsung.SMT.lang_en_gb_l02` | `/data/app/...` (TTS voice) | APK + data deleted | disabled |
+
+Teams, Office, Gmail and Samsung Internet are in the default keep list, so the rows marked
+**kept** are not touched at all unless you pass `--no-keep`. Messages and the telephony
+stack are system apps and are protected in the same way.
 
 A system app that has been **updated from the store** also shows a `/data/app` path,
 but it is still restorable because the original APK is in the system image:

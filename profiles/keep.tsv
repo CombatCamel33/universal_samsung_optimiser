@@ -1,0 +1,82 @@
+# group	package	category	what it is / why it is kept
+# ---------------------------------------------------------------------------------------------------
+# Packages listed here are NEVER removed, even when a profile would otherwise
+# remove them. Groups are enabled by default:
+#
+#   teams  samsung-internet  office  gmail  messages  phoning
+#
+# Select different groups with --keep <group[,group...]> (Windows: -Keep), or
+# restore the original aggressive behaviour with --no-keep (Windows: -NoKeep).
+#
+# The list applies to tablet and phone profiles. Watch profiles have a separate,
+# device-tested safety model and ignore this file. On a phone the dialer, in-call
+# UI, IMS/VoLTE, MMS and messaging apps stay installed.
+#
+# A package that is not installed is simply ignored. Add extra packages to a
+# group if your model uses different package names.
+
+# ---------------------------------------------------------------- Microsoft Teams
+teams	com.microsoft.teams	Microsoft	Microsoft Teams
+teams	com.microsoft.teams.service	Microsoft	Teams background service (some builds)
+
+# ---------------------------------------------------------------- Samsung Internet
+samsung-internet	com.sec.android.app.sbrowser	Samsung	Samsung Internet browser
+samsung-internet	com.sec.android.app.sbrowser.launcher	Samsung	Samsung Internet launcher shortcut (some builds)
+
+# ---------------------------------------------------------------- Microsoft 365 / Office
+office	com.microsoft.office.word	Microsoft	Microsoft Word
+office	com.microsoft.office.excel	Microsoft	Microsoft Excel
+office	com.microsoft.office.powerpoint	Microsoft	Microsoft PowerPoint
+office	com.microsoft.office.onenote	Microsoft	Microsoft OneNote
+office	com.microsoft.office.outlook	Microsoft	Microsoft Outlook
+office	com.microsoft.office.officehub	Microsoft	Unified Microsoft 365 (Office) app - older builds
+office	com.microsoft.office.officehubrow	Microsoft	Unified Microsoft 365 (Office) app
+office	com.microsoft.skydrive	Microsoft	Microsoft OneDrive
+
+# ---------------------------------------------------------------- Gmail
+gmail	com.google.android.gm	Google	Gmail
+
+# ---------------------------------------------------------------- Messaging
+# Samsung Messages is deliberately NOT kept - aggressive removes it and Google
+# Messages remains the kept SMS/MMS app. Confirm Google Messages is the default
+# SMS app before using aggressive on a phone.
+messages	com.google.android.apps.messaging	Google	Google Messages
+messages	com.android.mms.service	AOSP	MMS send/receive service
+messages	com.samsung.android.messageguardsync	Samsung	Message Guard companion sync
+
+# ---------------------------------------------------------------- Phone / telephony
+phoning	com.samsung.android.dialer	Samsung	Phone dialer
+phoning	com.samsung.android.incallui	Samsung	In-call UI
+phoning	com.samsung.android.app.telephonyui	Samsung	Telephony settings UI
+phoning	com.samsung.android.callassistant	Samsung	Call assistant / spam screening
+phoning	com.samsung.android.callbgprovider	Samsung	Call background provider
+phoning	com.samsung.android.smartcallprovider	Samsung	Smart Call caller ID
+phoning	com.samsung.android.emergency	Samsung	Emergency SOS / medical info
+phoning	com.sec.android.emergencylauncher	Samsung	Emergency launcher
+phoning	com.samsung.android.vtcamerasettings	Samsung	Video-call camera settings (IMS)
+phoning	com.sec.imslogger	Samsung	IMS logging
+phoning	com.sec.sve	Samsung	VoLTE engine
+phoning	com.samsung.android.mdecservice	Samsung	Call continuity (MDE)
+phoning	com.android.calllogbackup	AOSP	Call-log backup provider
+phoning	com.android.simappdialog	AOSP	SIM application dialog
+phoning	com.android.phone	AOSP	Core phone services
+phoning	com.android.server.telecom	AOSP	Telecom call-routing service
+phoning	com.android.providers.telephony	AOSP	SMS/MMS and telephony database
+phoning	com.android.carrierconfig	AOSP	Carrier configuration service
+phoning	com.android.carrierdefaultapp	AOSP	Carrier data-plan and provisioning UI
+phoning	com.google.android.apps.carrier.carrierwifi	Google	Carrier Wi-Fi calling / auto-connect support
+phoning	com.google.android.ims	Google	Carrier Services / RCS and IMS support
+phoning	com.hiya.star	Carrier	Hiya caller ID and spam screening
+phoning	com.samsung.android.sdm.config	Samsung	Carrier and service configuration bundles
+phoning	com.samsung.android.cidmanager	Samsung	Carrier identity and CSC configuration
+phoning	com.samsung.android.app.omcagent	Samsung	Carrier OMC / CSC configuration agent
+phoning	com.samsung.android.scpm	Samsung	Carrier configuration and policy manager
+phoning	com.samsung.android.incall.contentprovider	Samsung	In-call content provider
+phoning	com.samsung.android.app.telephonyui.esimclient	Samsung	eSIM telephony UI
+phoning	com.samsung.advp.imssettings	Samsung	Samsung IMS settings
+phoning	com.samsung.ims.smk	Samsung	Samsung IMS key-management service
+phoning	com.sec.imsservice	Samsung	Core Samsung IMS / VoLTE / Wi-Fi calling service
+phoning	com.sec.phone	Samsung	Samsung phone service
+phoning	com.sec.android.RilServiceModeApp	Samsung	Radio interface service-mode support
+phoning	com.sec.app.RilErrorNotifier	Samsung	Radio interface error notifications
+phoning	com.sec.vsim.ericssonnsds.webapp	Samsung	Virtual-SIM / carrier provisioning support

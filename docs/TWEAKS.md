@@ -6,6 +6,71 @@ This file is generated from `profiles/*.tsv` by `tools/generate-docs.py`.
 * **balanced** = tiers 1-2
 * **aggressive** = tiers 1-3
 
+## Kept by default
+
+`profiles/keep.tsv` lists packages that **no profile ever removes**, on tablets and
+phones alike. Every group below is enabled by default:
+
+| Group | Package | What it is |
+|---|---|---|
+| `teams` | `com.microsoft.teams` | Microsoft Teams |
+| `teams` | `com.microsoft.teams.service` | Teams background service (some builds) |
+| `samsung-internet` | `com.sec.android.app.sbrowser` | Samsung Internet browser |
+| `samsung-internet` | `com.sec.android.app.sbrowser.launcher` | Samsung Internet launcher shortcut (some builds) |
+| `office` | `com.microsoft.office.word` | Microsoft Word |
+| `office` | `com.microsoft.office.excel` | Microsoft Excel |
+| `office` | `com.microsoft.office.powerpoint` | Microsoft PowerPoint |
+| `office` | `com.microsoft.office.onenote` | Microsoft OneNote |
+| `office` | `com.microsoft.office.outlook` | Microsoft Outlook |
+| `office` | `com.microsoft.office.officehub` | Unified Microsoft 365 (Office) app - older builds |
+| `office` | `com.microsoft.office.officehubrow` | Unified Microsoft 365 (Office) app |
+| `office` | `com.microsoft.skydrive` | Microsoft OneDrive |
+| `gmail` | `com.google.android.gm` | Gmail |
+| `messages` | `com.google.android.apps.messaging` | Google Messages |
+| `messages` | `com.android.mms.service` | MMS send/receive service |
+| `messages` | `com.samsung.android.messageguardsync` | Message Guard companion sync |
+| `phoning` | `com.samsung.android.dialer` | Phone dialer |
+| `phoning` | `com.samsung.android.incallui` | In-call UI |
+| `phoning` | `com.samsung.android.app.telephonyui` | Telephony settings UI |
+| `phoning` | `com.samsung.android.callassistant` | Call assistant / spam screening |
+| `phoning` | `com.samsung.android.callbgprovider` | Call background provider |
+| `phoning` | `com.samsung.android.smartcallprovider` | Smart Call caller ID |
+| `phoning` | `com.samsung.android.emergency` | Emergency SOS / medical info |
+| `phoning` | `com.sec.android.emergencylauncher` | Emergency launcher |
+| `phoning` | `com.samsung.android.vtcamerasettings` | Video-call camera settings (IMS) |
+| `phoning` | `com.sec.imslogger` | IMS logging |
+| `phoning` | `com.sec.sve` | VoLTE engine |
+| `phoning` | `com.samsung.android.mdecservice` | Call continuity (MDE) |
+| `phoning` | `com.android.calllogbackup` | Call-log backup provider |
+| `phoning` | `com.android.simappdialog` | SIM application dialog |
+| `phoning` | `com.android.phone` | Core phone services |
+| `phoning` | `com.android.server.telecom` | Telecom call-routing service |
+| `phoning` | `com.android.providers.telephony` | SMS/MMS and telephony database |
+| `phoning` | `com.android.carrierconfig` | Carrier configuration service |
+| `phoning` | `com.android.carrierdefaultapp` | Carrier data-plan and provisioning UI |
+| `phoning` | `com.google.android.apps.carrier.carrierwifi` | Carrier Wi-Fi calling / auto-connect support |
+| `phoning` | `com.google.android.ims` | Carrier Services / RCS and IMS support |
+| `phoning` | `com.hiya.star` | Hiya caller ID and spam screening |
+| `phoning` | `com.samsung.android.sdm.config` | Carrier and service configuration bundles |
+| `phoning` | `com.samsung.android.cidmanager` | Carrier identity and CSC configuration |
+| `phoning` | `com.samsung.android.app.omcagent` | Carrier OMC / CSC configuration agent |
+| `phoning` | `com.samsung.android.scpm` | Carrier configuration and policy manager |
+| `phoning` | `com.samsung.android.incall.contentprovider` | In-call content provider |
+| `phoning` | `com.samsung.android.app.telephonyui.esimclient` | eSIM telephony UI |
+| `phoning` | `com.samsung.advp.imssettings` | Samsung IMS settings |
+| `phoning` | `com.samsung.ims.smk` | Samsung IMS key-management service |
+| `phoning` | `com.sec.imsservice` | Core Samsung IMS / VoLTE / Wi-Fi calling service |
+| `phoning` | `com.sec.phone` | Samsung phone service |
+| `phoning` | `com.sec.android.RilServiceModeApp` | Radio interface service-mode support |
+| `phoning` | `com.sec.app.RilErrorNotifier` | Radio interface error notifications |
+| `phoning` | `com.sec.vsim.ericssonnsds.webapp` | Virtual-SIM / carrier provisioning support |
+
+Pick specific groups with `--keep <groups>` (repeatable or comma-separated), drop the
+protection entirely with `--no-keep`, or print the list with `--list-keep`. On Windows
+the flags are `-Keep`, `-NoKeep`, `-ListKeep` and `-NoSettings`. Kept packages are printed
+with `(kept)` during a run and are skipped before any `pm uninstall` / `pm disable-user`
+call, so they are never touched.
+
 Packages that live in the read-only system image are removed per user profile with
 `pm uninstall -k --user N` (app data is kept) and come back with
 `pm install-existing --user N`.
@@ -16,6 +81,8 @@ removed completely - `pm uninstall` deletes the APK and the app data, since the 
 would be orphaned otherwise. Because the APK is not in the system image they cannot be
 restored with `pm install-existing` - they have to be downloaded again from the store.
 Pass `--disable-preloads` to hide them instead and keep them restorable with `pm enable`.
+Office and Samsung Internet are in the default keep list, so they are not removed at all
+unless you pass `--no-keep`.
 
 Nothing here needs root.
 
@@ -148,15 +215,18 @@ ARCore, Link-to-Windows and the Samsung TTS language packs (which are large).
 | `com.samsung.android.game.gametools` | Samsung | Game Launcher / in-game overlay tools |
 | `com.samsung.gpuwatchapp` | Samsung | GPU watchdog used by Game Launcher |
 
-## Tier 3 - aggressive (163 packages total)
+## Tier 3 - aggressive (164 packages total)
 
-Adds full apps you can replace with something better, plus the telephony stack
-(this tablet has no SIM slot). Read the notes before applying - a few of these
-are things people genuinely use.
+Adds full apps you can replace with something better, plus the telephony stack.
+Read the notes before applying - a few of these are things people genuinely use.
+
+The **Teams, Samsung Internet, Office, Gmail, Messages and telephony** rows below are
+still listed in tier 3, but the default keep list skips them. They are only removed when
+you pass `--no-keep`.
 
 | Package | Category | What it is / why it can go |
 |---|---|---|
-| `com.sec.android.app.sbrowser` | Samsung | Samsung Internet browser (Brave is installed) |
+| `com.sec.android.app.sbrowser` | Samsung | Samsung Internet browser (kept by default) |
 | `com.android.chrome` | Google | Chrome (Brave is installed) |
 | `com.sec.android.app.chromecustomizations` | Google | Chrome-only customisation overlay (useless once Chrome is gone) |
 | `com.google.android.youtube` | Google | YouTube app (ReVanced/Morphe YouTube is installed instead) |
@@ -164,9 +234,9 @@ are things people genuinely use.
 | `com.google.android.apps.docs` | Google | Google Drive (15 GB cloud storage client) |
 | `com.google.android.apps.docs.editors.docs` | Google | Google Docs editor |
 | `com.google.android.apps.photos` | Google | Google Photos |
-| `com.google.android.gm` | Google | Gmail |
+| `com.google.android.gm` | Google | Gmail (kept by default) |
 | `com.google.android.apps.maps` | Google | Google Maps |
-| `com.google.android.apps.messaging` | Google | Google Messages (no SIM in this tablet) |
+| `com.google.android.apps.messaging` | Google | Google Messages (kept by default) |
 | `com.google.android.apps.tachyon` | Google | Google Meet (Zoom/Teams are installed) |
 | `com.google.android.apps.bard` | Google | Google Gemini |
 | `com.google.android.googlequicksearchbox` | Google | Google app / Discover feed / "Hey Google" (~330 MB RAM while running) |
@@ -179,6 +249,7 @@ are things people genuinely use.
 | `com.microsoft.office.onenote` | Microsoft | OneNote |
 | `com.microsoft.skydrive` | Microsoft | OneDrive |
 | `com.microsoft.teams` | Microsoft | Microsoft Teams |
+| `com.samsung.android.messaging` | Samsung | Samsung Messages (Google Messages is the kept SMS/MMS app) |
 | `com.samsung.android.app.reminder` | Samsung | Samsung Reminder |
 | `com.samsung.android.app.notes` | Samsung | Samsung Notes (remove only if you don't use it - it is your heaviest app) |
 | `com.samsung.android.kidsinstaller` | Samsung | Samsung Kids |

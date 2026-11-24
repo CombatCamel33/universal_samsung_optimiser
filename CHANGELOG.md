@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.1
+
+- **Phone keep list.** New `profiles/keep.tsv` with six groups - `teams`,
+  `samsung-internet`, `office`, `gmail`, `messages` and `phoning` - all enabled by
+  default on tablets and phones. Packages in those groups are skipped by every profile,
+  so a connected phone keeps Teams, Samsung Internet, Office, Gmail, Google Messages,
+  the dialer, IMS/VoLTE/Wi-Fi calling, RCS and Emergency SOS working.
+- `messages` protects Google Messages and MMS but deliberately **not** Samsung Messages,
+  which `aggressive` targets. Confirm Google Messages holds the SMS role first.
+- `phoning` also protects the AOSP phone/telecom stack, carrier configuration, eSIM and
+  virtual-SIM support, Hiya and the Samsung IMS services - packages a tablet-only list
+  would otherwise strip from a phone.
+- New `--keep <groups>` (Windows `-Keep`), `--no-keep` (`-NoKeep`) and `--list-keep`
+  (`-ListKeep`) options. Kept rows are printed as `(kept)` and skipped before any
+  `pm uninstall` / `pm disable-user` call.
+- New `--no-settings` (Windows `-NoSettings`) applies package changes only and leaves
+  animation scales, refresh rate and every other Android setting alone.
+- New `--compare [dir]` (Windows `-Compare`) reprints the before/after statistics of a
+  run, including tablet and phone runs; the interactive menu has a `6) compare` entry.
+- Verified on a Galaxy M23 5G (`SM-M236B`): 495 -> 400 installed packages, 11.1 GB of
+  storage freed, and all 43 protected packages plus all 13 Knox/OTA components still
+  present after the reboot. README has the full before/after table.
+- `profiles/packages.tsv` and `docs/TWEAKS.md` explain which rows are kept by default;
+  `tools/generate-docs.py` regenerates the keep section.
+
 ## 1.3.0
 
 - Renamed the project and CLI to **Universal Samsung Optimiser**.

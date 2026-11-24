@@ -6,6 +6,10 @@
 #
 # Tabs separate the four columns. Lines starting with # are ignored.
 # Restore is always possible: pm install-existing --user <id> <package>
+#
+# Packages listed in profiles/keep.tsv (Teams, Samsung Internet, Office, Gmail,
+# Messages, phone/telephony) are skipped by every tablet/phone profile by default.
+# Use --keep to choose groups or --no-keep for the old behaviour.
 
 # ---------------------------------------------------------------- TIER 1: telemetry & diagnostics
 1	com.samsung.android.rubin.app	Samsung	Customization Service - usage analytics, ad personalisation, "recommended content"
@@ -130,7 +134,9 @@
 2	com.samsung.gpuwatchapp	Samsung	GPU watchdog used by Game Launcher
 
 # ---------------------------------------------------------------- TIER 3: user-facing apps you can replace
-3	com.sec.android.app.sbrowser	Samsung	Samsung Internet browser (Brave is installed)
+# Rows for Teams, Samsung Internet, Office, Gmail, Messages and telephony are kept
+# by default through profiles/keep.tsv, so a connected phone still works.
+3	com.sec.android.app.sbrowser	Samsung	Samsung Internet browser (kept by default)
 3	com.android.chrome	Google	Chrome (Brave is installed)
 3	com.sec.android.app.chromecustomizations	Google	Chrome-only customisation overlay (useless once Chrome is gone)
 3	com.google.android.youtube	Google	YouTube app (ReVanced/Morphe YouTube is installed instead)
@@ -138,9 +144,9 @@
 3	com.google.android.apps.docs	Google	Google Drive (15 GB cloud storage client)
 3	com.google.android.apps.docs.editors.docs	Google	Google Docs editor
 3	com.google.android.apps.photos	Google	Google Photos
-3	com.google.android.gm	Google	Gmail
+3	com.google.android.gm	Google	Gmail (kept by default)
 3	com.google.android.apps.maps	Google	Google Maps
-3	com.google.android.apps.messaging	Google	Google Messages (no SIM in this tablet)
+3	com.google.android.apps.messaging	Google	Google Messages (kept by default)
 3	com.google.android.apps.tachyon	Google	Google Meet (Zoom/Teams are installed)
 3	com.google.android.apps.bard	Google	Google Gemini
 3	com.google.android.googlequicksearchbox	Google	Google app / Discover feed / "Hey Google" (~330 MB RAM while running)
@@ -153,6 +159,7 @@
 3	com.microsoft.office.onenote	Microsoft	OneNote
 3	com.microsoft.skydrive	Microsoft	OneDrive
 3	com.microsoft.teams	Microsoft	Microsoft Teams
+3	com.samsung.android.messaging	Samsung	Samsung Messages (Google Messages is the kept SMS/MMS app)
 3	com.samsung.android.app.reminder	Samsung	Samsung Reminder
 3	com.samsung.android.app.notes	Samsung	Samsung Notes (remove only if you don't use it - it is your heaviest app)
 3	com.samsung.android.kidsinstaller	Samsung	Samsung Kids
@@ -170,7 +177,7 @@
 3	com.samsung.android.app.find	Samsung	SmartThings Find (device tracker)
 
 
-# ---------------------------------------------------------------- TIER 3: telephony stack (Wi-Fi-only tablet)
+# ---------------------------------------------------------------- TIER 3: telephony stack (kept on phones)
 3	com.samsung.android.dialer	Samsung	Phone dialer
 3	com.samsung.android.incallui	Samsung	In-call UI
 3	com.samsung.android.app.telephonyui	Samsung	Telephony settings UI fragments

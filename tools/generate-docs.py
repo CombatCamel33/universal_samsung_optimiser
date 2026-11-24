@@ -39,14 +39,25 @@ def watch_table(items):
     return "\n".join(out)
 
 
+def write_utf8_lf(path, content):
+    """Write generated Markdown reproducibly on Windows, macOS, and Linux."""
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(content)
+
+
 def main():
     pkgs = list(rows(PROFILES / "packages.tsv"))
     extras = list(rows(PROFILES / "extras.tsv"))
+    keep = list(rows(PROFILES / "keep.tsv"))
     settings = list(rows(PROFILES / "settings.tsv"))
 
     tiers = {1: [], 2: [], 3: []}
     for r in pkgs:
         tiers[int(r[0])].append(r)
+
+    keep_table = "| Group | Package | What it is |\n|---|---|---|\n" + "\n".join(
+        f"| `{group}` | `{pkg}` | {note} |" for group, pkg, _cat, note in keep
+    )
 
     doc = f"""# Every tweak, explained
 
@@ -55,6 +66,19 @@ This file is generated from `profiles/*.tsv` by `tools/generate-docs.py`.
 * **light** = tier 1
 * **balanced** = tiers 1-2
 * **aggressive** = tiers 1-3
+
+## Kept by default
+
+`profiles/keep.tsv` lists packages that **no profile ever removes**, on tablets and
+phones alike. Every group below is enabled by default:
+
+{keep_table}
+
+Pick specific groups with `--keep <groups>` (repeatable or comma-separated), drop the
+protection entirely with `--no-keep`, or print the list with `--list-keep`. On Windows
+the flags are `-Keep`, `-NoKeep`, `-ListKeep` and `-NoSettings`. Kept packages are printed
+with `(kept)` during a run and are skipped before any `pm uninstall` / `pm disable-user`
+call, so they are never touched.
 
 Packages that live in the read-only system image are removed per user profile with
 `pm uninstall -k --user N` (app data is kept) and come back with
@@ -66,6 +90,8 @@ removed completely - `pm uninstall` deletes the APK and the app data, since the 
 would be orphaned otherwise. Because the APK is not in the system image they cannot be
 restored with `pm install-existing` - they have to be downloaded again from the store.
 Pass `--disable-preloads` to hide them instead and keep them restorable with `pm enable`.
+Office and Samsung Internet are in the default keep list, so they are not removed at all
+unless you pass `--no-keep`.
 
 Nothing here needs root.
 
@@ -88,9 +114,12 @@ ARCore, Link-to-Windows and the Samsung TTS language packs (which are large).
 
 ## Tier 3 - aggressive ({len(pkgs)} packages total)
 
-Adds full apps you can replace with something better, plus the telephony stack
-(this tablet has no SIM slot). Read the notes before applying - a few of these
-are things people genuinely use.
+Adds full apps you can replace with something better, plus the telephony stack.
+Read the notes before applying - a few of these are things people genuinely use.
+
+The **Teams, Samsung Internet, Office, Gmail, Messages and telephony** rows below are
+still listed in tier 3, but the default keep list skips them. They are only removed when
+you pass `--no-keep`.
 
 {table(tiers[3])}
 
@@ -175,8 +204,8 @@ adb shell pm install-existing --user 0 <package>
 """
 
     OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(doc)
-    print(f"wrote {OUT.relative_to(ROOT)} ({len(pkgs)} packages, {len(extras)} extras, {len(settings)} settings)")
+    write_utf8_lf(OUT, doc)
+    print(f"wrote {OUT.relative_to(ROOT)} ({len(pkgs)} packages, {len(extras)} extras, {len(keep)} keeps, {len(settings)} settings)")
 
     watch_dir = PROFILES / "watch"
     watch_pkgs = list(rows(watch_dir / "packages.tsv"))
@@ -303,7 +332,7 @@ RAM immediately after package changes is only indicative; reboot before taking a
 comparison.
 """
 
-    WATCH_OUT.write_text(watch_doc)
+    write_utf8_lf(WATCH_OUT, watch_doc)
     print(
         f"wrote {WATCH_OUT.relative_to(ROOT)} "
         f"({len(watch_pkgs)} packages, {len(watch_extras)} extras, {len(watch_settings)} settings)"

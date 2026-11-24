@@ -12,7 +12,7 @@
 #>
 
 $ErrorActionPreference = 'Continue'
-$Version = '1.3.0'
+$Version = '1.3.1'
 $Root    = Split-Path -Parent $PSScriptRoot
 $Profiles = Join-Path $Root 'profiles'
 $BackupRoot = Join-Path $Root 'backups'
@@ -26,10 +26,15 @@ $script:DisablePreloads = $false
 $script:Trim      = $false
 $script:Dexopt    = $false
 $script:Reboot    = $false
+$script:ApplySettings = $true
 $script:Mode      = 'apply'
 $script:RestoreDir = ''
+$script:CompareDir = ''
 $script:UserList  = @()
 $script:Serial    = ''
+$script:KeepGroups = $null          # $null = the default groups
+$script:KeepDefault = 'teams,samsung-internet,office,gmail,messages,phoning'
+$script:KeepValid = @('teams', 'samsung-internet', 'office', 'gmail', 'messages', 'phoning')
 $script:Adb       = $env:ADB
 $script:DeviceClass = 'tablet'
 $script:DeviceLabel = 'Galaxy tablet / Android'
@@ -63,11 +68,12 @@ Universal Samsung Optimiser v$Version
   .\run.ps1 <profile> [options]      apply a profile
   .\run.ps1 -Restore [dir]           undo the last run (or a specific backup)
   .\run.ps1 -RestoreAll              reinstall every package in every profile
+  .\run.ps1 -Compare [dir]           show the before/after statistics of a run
 
 Profiles
   light         safest telemetry, diagnostics and factory leftovers
   balanced      + optional Samsung/Google background features
-  aggressive    + replaceable user-facing apps
+  aggressive    + replaceable user-facing apps (Teams/Gmail/Office/phone kept)
 
   A Galaxy Watch is detected automatically and uses its own conservative,
   device-tested package list. Run -List to see both device families.
@@ -80,9 +86,15 @@ Options
   -Extras           device-specific high-risk removals (read -List first)
   -DisablePreloads  hide /data-installed preloads instead of deleting them
                     (Office, Notes, Samsung Internet... stay on disk, restorable)
+  -Keep <groups>    keep these app groups installed (default: all of them)
+                    groups: teams, samsung-internet, office, gmail, messages, phoning
+                    repeatable or comma-separated; "none" disables keeping
+  -NoKeep           original aggressive behaviour - remove every listed package
+  -ListKeep         print the keep groups and their packages
   -Trim             clear app caches
   -Dexopt           run a background dexopt job now (slow, optimises app start-up)
   -Reboot           reboot when finished
+  -NoSettings       remove/disable packages only; do not change Android settings
   -Yes              do not ask for confirmation
   -List             print the package lists
   -Report           print device info, RAM and storage
@@ -224,6 +236,47 @@ function Get-Tier {
     'aggressive' { return 3 }
     default      { return 0 }
   }
+}
+
+# ------------------------------------------------------------------ keep groups
+function Get-KeepGroupList {
+  if ($null -eq $script:KeepGroups) { return @($script:KeepDefault -split ',') }
+  return @($script:KeepGroups)
+}
+
+function Add-KeepGroups {
+  param([string[]]$Values)
+  if ($null -eq $script:KeepGroups) { $script:KeepGroups = @() }
+  foreach ($v in $Values) {
+    foreach ($g in ($v -split ',')) {
+      $g = $g.Trim()
+      if ($g -and $g -ne 'none' -and $script:KeepGroups -notcontains $g) { $script:KeepGroups += $g }
+    }
+  }
+}
+
+function Assert-KeepGroups {
+  foreach ($g in @(Get-KeepGroupList)) {
+    if ($script:KeepValid -notcontains $g) {
+      Die "unknown keep group '$g' (use teams, samsung-internet, office, gmail, messages, phoning or none)"
+    }
+  }
+}
+
+function Get-KeepPackages {
+  if ($script:DeviceClass -eq 'watch') { return @() }
+  $file = Join-Path $Profiles 'keep.tsv'
+  if (-not (Test-Path $file)) { return @() }
+  $groups = @(Get-KeepGroupList)
+  if ($groups.Count -eq 0) { return @() }
+  $out = @()
+  foreach ($line in (Get-Content -LiteralPath $file)) {
+    if ($line -match '^\s*#') { continue }
+    $f = $line -split "`t"
+    if ($f.Count -lt 3) { continue }
+    if ($groups -contains $f[0]) { $out += $f[1] }
+  }
+  return @($out | Sort-Object -Unique)
 }
 
 function Get-ProfileRows {
@@ -447,11 +500,17 @@ function New-Backup {
   $script:SettingsManifest = Join-Path $dir 'settings.tsv'
   Set-Content -LiteralPath $script:Manifest -Value '' -Encoding ASCII
   Set-Content -LiteralPath $script:SettingsManifest -Value '' -Encoding ASCII
+  $keepInfo = if ($script:DeviceClass -eq 'watch') { 'not-applicable' } else { (Get-KeepGroupList) -join ',' }
   $info = @(
     "Universal Samsung Optimiser v$Version",
     "date      : $(Get-Date)",
     "profile   : $($script:Profile)",
+    "keep      : $keepInfo",
     "extras    : $($script:Extras)",
+    "apply-settings : $($script:ApplySettings)",
+    "trim      : $($script:Trim)",
+    "dexopt    : $($script:Dexopt)",
+    "reboot    : $($script:Reboot)",
     "serial    : $($script:Serial)",
     "model     : $($script:Model)",
     "device    : $($script:Device)",
@@ -465,9 +524,134 @@ function New-Backup {
 }
 
 function Get-LatestBackup {
-  if (-not (Test-Path $script:Backups)) { return '' }
-  $d = Get-ChildItem -LiteralPath $script:Backups -Directory | Sort-Object Name | Select-Object -Last 1
-  if ($d) { return $d.FullName } else { return '' }
+  if (-not (Test-Path $BackupRoot)) { return '' }
+  $info = Get-ChildItem -LiteralPath $BackupRoot -File -Filter 'info.txt' -Recurse -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime | Select-Object -Last 1
+  if ($info) { return $info.Directory.FullName } else { return '' }
+}
+
+# ------------------------------------------------------------------ statistics
+function Get-DeviceStats {
+  $s = [ordered]@{}
+  $s['model']   = Invoke-Shell 'getprop ro.product.model'
+  $s['android'] = Invoke-Shell 'getprop ro.build.version.release'
+
+  $mem = Invoke-Shell 'cat /proc/meminfo'
+  foreach ($pair in @(@('mem_total_kb', 'MemTotal'), @('mem_free_kb', 'MemFree'), @('mem_available_kb', 'MemAvailable'))) {
+    $m = [regex]::Match($mem, "(?m)^$($pair[1]):\s+(\d+)")
+    $s[$pair[0]] = if ($m.Success) { [long]$m.Groups[1].Value } else { 0 }
+  }
+
+  $df = Invoke-Shell 'df -k /data'
+  $line = ($df -split "`n" | Where-Object { $_ -match '^\S+\s+\d+\s+\d+\s+\d+' } | Select-Object -Last 1)
+  $f = @()
+  if ($line) { $f = @($line -split '\s+') }
+  $s['storage_total_kb'] = if ($f.Count -ge 4) { [long]$f[1] } else { 0 }
+  $s['storage_used_kb']  = if ($f.Count -ge 4) { [long]$f[2] } else { 0 }
+  $s['storage_free_kb']  = if ($f.Count -ge 4) { [long]$f[3] } else { 0 }
+
+  foreach ($u in @(Resolve-Users)) {
+    $installed = @((Invoke-Shell "pm list packages --user $u") -split "`n" | Where-Object { $_ -match '^package:' })
+    $disabled  = @((Invoke-Shell "pm list packages -d --user $u") -split "`n" | Where-Object { $_ -match '^package:' })
+    $s["packages.user.$u"] = $installed.Count
+    $s["disabled.user.$u"] = $disabled.Count
+  }
+  return $s
+}
+
+function Save-DeviceStats {
+  param($Stats, [string]$Path)
+  $lines = @("key`tvalue")
+  foreach ($k in $Stats.Keys) { $lines += "$k`t$($Stats[$k])" }
+  Set-Content -LiteralPath $Path -Value $lines -Encoding ASCII
+}
+
+function Import-DeviceStats {
+  param([string]$Path)
+  $h = [ordered]@{}
+  foreach ($line in (Get-Content -LiteralPath $Path)) {
+    $f = $line -split "`t"
+    if ($f.Count -ge 2 -and $f[0] -ne 'key') { $h[$f[0]] = $f[1] }
+  }
+  return ,$h
+}
+
+function Format-Gb {
+  param([double]$Kb)
+  return ('{0:N1} GB' -f ($Kb / 1MB))
+}
+
+function Show-StatsDiff {
+  param([string]$Before, [string]$After)
+  if (-not (Test-Path $Before)) { Warn 'no statistics were recorded before this run'; return $false }
+  if (-not (Test-Path $After))  { Warn 'no statistics were recorded after this run (was the run interrupted?)'; return $false }
+
+  $b = Import-DeviceStats $Before
+  $a = Import-DeviceStats $After
+  Say ''
+  Say ('  {0,-34} {1,-12} {2,-12} {3}' -f 'Metric', 'Before', 'After', 'Change')
+
+  foreach ($k in $a.Keys) {
+    if ($k -notmatch '_kb$' -and $k -notmatch '^(packages|disabled)\.user\.') { continue }
+
+    $bv = 0.0; $av = 0.0
+    if ($b.Contains($k)) { [double]::TryParse([string]$b[$k], [ref]$bv) | Out-Null }
+    [double]::TryParse([string]$a[$k], [ref]$av) | Out-Null
+    $d = $av - $bv
+
+    if ($k -match '_kb$') {
+      $bs = Format-Gb $bv
+      $as = Format-Gb $av
+      $sign = if ($d -gt 0) { '+' } else { '' }
+      $cs = '{0}{1:N1} GB' -f $sign, ($d / 1MB)
+    } else {
+      $bs = '{0}' -f [long]$bv
+      $as = '{0}' -f [long]$av
+      $sign = if ($d -gt 0) { '+' } else { '' }
+      $cs = '{0}{1}' -f $sign, [long]$d
+    }
+
+    $label = switch -Regex ($k) {
+      '^mem_total_kb$'         { 'Total RAM'; break }
+      '^mem_available_kb$'     { 'Available RAM'; break }
+      '^mem_free_kb$'          { 'Free RAM'; break }
+      '^storage_total_kb$'     { 'Storage total'; break }
+      '^storage_used_kb$'      { 'Storage used'; break }
+      '^storage_free_kb$'      { 'Storage free'; break }
+      '^packages\.user\.(.+)$' { "Installed packages (user $($Matches[1]))"; break }
+      '^disabled\.user\.(.+)$' { "Disabled packages (user $($Matches[1]))"; break }
+      default                  { $k }
+    }
+    Say ('  {0,-34} {1,-12} {2,-12} {3}' -f $label, $bs, $as, $cs)
+  }
+  Dim '  RAM figures move with what is open - package and storage counts are the reliable ones.'
+}
+
+function Show-Compare {
+  $dir = $script:CompareDir
+  if (-not $dir) { $dir = Get-LatestBackup }
+  if (-not $dir) { Die 'no backups found - apply a profile first' }
+  if (-not (Test-Path $dir)) { Die "backup not found: $dir" }
+  Head1 "Before / after - $(Split-Path -Leaf $dir)"
+  $info = Join-Path $dir 'info.txt'
+  if (Test-Path $info) {
+    Get-Content -LiteralPath $info | ForEach-Object { Say "  $_" }
+    Head1 'Statistics'
+  }
+  $statsBefore = Join-Path $dir 'stats-before.tsv'
+  $statsAfter = Join-Path $dir 'stats-after.tsv'
+  if ((Test-Path $statsBefore) -and (Test-Path $statsAfter)) {
+    $null = Show-StatsDiff $statsBefore $statsAfter
+    return
+  }
+
+  $before = Join-Path $dir 'before.txt'
+  $after = Join-Path $dir 'after.txt'
+  if ((Test-Path $before) -and (Test-Path $after)) {
+    Show-BeforeAfter -BeforePath $before -AfterPath $after
+    return
+  }
+  $null = Show-StatsDiff $statsBefore $statsAfter
 }
 
 # ------------------------------------------------------------------ report
@@ -522,6 +706,17 @@ function Show-Report {
 }
 
 # ------------------------------------------------------------------ list
+function Show-KeepList {
+  $file = Join-Path $Profiles 'keep.tsv'
+  if (-not (Test-Path $file)) { Warn 'keep.tsv not found'; return }
+  Head1 'Keep groups (never removed by a profile)'
+  foreach ($line in (Get-Content -LiteralPath $file)) {
+    if ($line -match '^\s*#') { continue }
+    $f = $line -split "`t"
+    if ($f.Count -ge 4) { Say ("  {0,-20} {1,-52} {2}" -f $f[0], $f[1], $f[3]) }
+  }
+}
+
 function Show-ProfileList {
   param([string]$Title, [string]$Directory)
   Head1 $Title
@@ -548,6 +743,7 @@ function Show-ProfileList {
 
 function Show-List {
   Show-ProfileList -Title 'Galaxy tablet / Android profiles' -Directory $Profiles
+  Show-KeepList
   Show-ProfileList -Title 'Galaxy Watch / Wear OS profiles' -Directory (Join-Path $Profiles 'watch')
 }
 
@@ -648,10 +844,25 @@ function Invoke-Apply {
   Say "  Target     : $($script:DeviceLabel)"
   Say "  Profile    : $($script:Profile) (tier <= $tier)"
   Say "  Packages   : $pkgCount"
-  Say "  Settings   : $(@(Get-SettingRows -MaxTier $tier).Count)"
+  $settingCount = @(Get-SettingRows -MaxTier $tier).Count
+  if ($script:ApplySettings) {
+    Say "  Settings   : $settingCount"
+  } else {
+    Say "  Settings   : skipped ($settingCount profile settings left unchanged)"
+  }
   Say "  Users      : $($users -join ' ')"
+  if ($script:DeviceClass -ne 'watch') {
+    $keepGroups = @(Get-KeepGroupList)
+    if ($keepGroups.Count -gt 0) {
+      Say "  Keep       : $($keepGroups -join ',') ($(@(Get-KeepPackages).Count) packages protected)"
+    } else {
+      Say '  Keep       : none - every package in the profile can be removed'
+    }
+  }
   if ($script:Extras) { Warn 'extras enabled - device-critical optional services will be changed' }
   if ($script:DisablePreloads) { Say '  Preloads   : disabled (kept on disk) instead of deleted' }
+  if ($script:Trim) { Say '  Cache      : trim after package changes' }
+  if ($script:Reboot) { Say '  Reboot     : yes, after statistics are captured' }
   if ($script:DryRun) { Warn 'dry run - nothing will change' }
 
   if (-not $script:DryRun -and -not $script:AssumeYes) {
@@ -663,6 +874,8 @@ function Invoke-Apply {
     New-Backup
     Info "Backup written to $($script:LastBackup)"
     $beforeFile = Join-Path $script:LastBackup 'before.txt'
+    Save-DeviceStats (Get-DeviceStats) (Join-Path $script:LastBackup 'stats-before.tsv')
+    Ok 'baseline statistics captured (before)'
   } else {
     $beforeFile = Join-Path $script:Tmp 'before.txt'
   }
@@ -672,12 +885,19 @@ function Invoke-Apply {
   $rows = @(Get-ProfileRows -File $script:PackagesFile -MaxTier $tier)
   if ($script:Extras) { $rows += @(Get-ProfileRows -File $script:ExtrasFile -MaxTier 9) }
 
+  $keep = @{}
+  foreach ($p in @(Get-KeepPackages)) { $keep[$p] = $true }
+
   $total = 0
   foreach ($u in $users) {
     Head1 "User $u - $(Get-UserLabel $u)"
     $null = Get-PackageCache -User $u
     Info 'Applying package profile'
     foreach ($r in $rows) {
+      if ($keep.ContainsKey($r[1])) {
+        Write-Host ("    = {0,-48} {1} (kept)" -f $r[1], $r[2]) -ForegroundColor DarkGray
+        continue
+      }
       $action = if ($r.Count -ge 5 -and $r[4]) { $r[4] } else { 'auto' }
       $rc = Invoke-ApplyPackage -User $u -Package $r[1] -Category $r[2] -Action $action
       if ($rc -eq 0) { $total++ }
@@ -685,8 +905,12 @@ function Invoke-Apply {
   }
 
   Head1 'System settings'
-  foreach ($r in @(Get-SettingRows -MaxTier $tier)) {
-    Set-Tweak -Ns $r[1] -Key $r[2] -Value $r[3] -Note $r[4]
+  if ($script:ApplySettings) {
+    foreach ($r in @(Get-SettingRows -MaxTier $tier)) {
+      Set-Tweak -Ns $r[1] -Key $r[2] -Value $r[3] -Note $r[4]
+    }
+  } else {
+    Dim '  skipped (package-only mode)'
   }
 
   if ($script:Trim -and -not $script:DryRun) {
@@ -700,6 +924,11 @@ function Invoke-Apply {
     Dim '  this can take several minutes...'
     $null = Invoke-Shell 'cmd package bg-dexopt-job'
     Ok 'dexopt job finished'
+  }
+
+  if (-not $script:DryRun) {
+    Save-DeviceStats (Get-DeviceStats) (Join-Path $script:LastBackup 'stats-after.tsv')
+    Ok 'statistics captured (after)'
   }
 
   if ($script:DryRun) {
@@ -890,14 +1119,30 @@ for ($i = 0; $i -lt $argsList.Count; $i++) {
     '^-Yes$|^-y$'                   { $script:AssumeYes = $true }
     '^-Extras$'                     { $script:Extras = $true }
     '^-DisablePreloads$'            { $script:DisablePreloads = $true }
+    '^-Keep(=(.*))?$' {
+      $vals = @()
+      if ($Matches[2]) { $vals += $Matches[2] }
+      else {
+        while ($i + 1 -lt $argsList.Count -and $argsList[$i+1] -notmatch '^-' -and $argsList[$i+1] -notmatch '^(light|balanced|aggressive)$') {
+          $i++
+          $vals += $argsList[$i]
+        }
+      }
+      if ($vals.Count -eq 0) { Fail '-Keep needs a group (teams, samsung-internet, office, gmail, messages, phoning or none)'; exit 2 }
+      Add-KeepGroups -Values $vals
+    }
+    '^-NoKeep$'                     { $script:KeepGroups = @() }
+    '^-ListKeep$'                   { $script:Mode = 'list-keep' }
     '^-Trim$'                       { $script:Trim = $true }
     '^-Dexopt$'                     { $script:Dexopt = $true }
     '^-Reboot$'                     { $script:Reboot = $true }
+    '^-NoSettings$'                 { $script:ApplySettings = $false }
     '^-AllUsers$'                   { $script:UserList = @() }
     '^-User(=(.*))?$'               { if ($Matches[2]) { $script:UserList += [int]$Matches[2] } else { $i++; $script:UserList += [int]$argsList[$i] } }
     '^-Serial(=(.*))?$'             { if ($Matches[2]) { $script:Serial = $Matches[2] } else { $i++; $script:Serial = $argsList[$i] } }
     '^-RestoreAll$'                 { $script:Mode = 'restore-all' }
     '^-Restore$'                    { $script:Mode = 'restore'; if ($i + 1 -lt $argsList.Count -and $argsList[$i+1] -notmatch '^-') { $i++; $script:RestoreDir = $argsList[$i] } }
+    '^-Compare(=(.*))?$'            { $script:Mode = 'compare'; if ($Matches[2]) { $script:CompareDir = $Matches[2] } elseif ($i + 1 -lt $argsList.Count -and $argsList[$i+1] -notmatch '^-') { $i++; $script:CompareDir = $argsList[$i] } }
     '^-List$'                       { $script:Mode = 'list' }
     '^-Report$'                     { $script:Mode = 'report' }
     '^-Help$|^-h$|^-\?$'            { Show-Usage; exit 0 }
@@ -906,10 +1151,14 @@ for ($i = 0; $i -lt $argsList.Count; $i++) {
   }
 }
 
+Assert-KeepGroups
+
 $null = New-Item -ItemType Directory -Path $script:Tmp -Force
 
 switch ($script:Mode) {
   'list'        { Show-List; exit 0 }
+  'list-keep'   { Show-KeepList; exit 0 }
+  'compare'     { Show-Compare; exit 0 }
   'report'      { Get-Device; Show-Report; exit 0 }
   'restore'     { Invoke-Restore; exit 0 }
   'restore-all' { Invoke-RestoreAll; exit 0 }
@@ -928,20 +1177,23 @@ if (-not $script:Profile) {
   } else {
     Say '  1) light       - telemetry, diagnostics, AR toys, preloads'
     Say '  2) balanced    - + Bixby, Samsung extras, gaming services, TTS packs'
-    Say '  3) aggressive  - + browsers, Office, YouTube, Samsung account apps'
+    Say '  3) aggressive  - + browsers, YouTube, Samsung account apps (Teams/Gmail/Office/phone kept)'
   }
   Say '  4) restore     - undo the last run'
   Say '  5) report      - show device info without changing anything'
+  Say '  6) compare     - before/after statistics of the last run'
   Say '  q) quit'
-  $choice = Read-Host '  Choose [1-5/q]'
+  $choice = Read-Host '  Choose [1-6/q]'
   switch ($choice) {
     '1' { $script:Profile = 'light' }
     '2' { $script:Profile = 'balanced' }
     '3' { $script:Profile = 'aggressive' }
     '4' { Invoke-Restore; exit 0 }
     '5' { Show-Report; exit 0 }
+    '6' { Show-Compare; exit 0 }
     default { Say '  bye.'; exit 0 }
   }
 }
 
 Invoke-Apply
+exit 0

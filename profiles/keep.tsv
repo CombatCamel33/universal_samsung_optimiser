@@ -80,3 +80,8 @@ phoning	com.sec.phone	Samsung	Samsung phone service
 phoning	com.sec.android.RilServiceModeApp	Samsung	Radio interface service-mode support
 phoning	com.sec.app.RilErrorNotifier	Samsung	Radio interface error notifications
 phoning	com.sec.vsim.ericssonnsds.webapp	Samsung	Virtual-SIM / carrier provisioning support
+phoning	com.google.android.dialer	Google	Google Phone dialer
+phoning	com.android.imsserviceentitlement	AOSP	IMS carrier entitlement for VoLTE and Wi-Fi calling
+phoning	com.mediatek.ims	MediaTek	MediaTek IMS stack for VoLTE and Wi-Fi calling
+phoning	com.mediatek.datachannel.service	MediaTek	IMS data-channel bridge used by VoLTE, Wi-Fi calling and RCS
+phoning	com.xiaomi.simactivate.service	Xiaomi	Xiaomi SIM activation and phone-number verification

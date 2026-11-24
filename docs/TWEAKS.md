@@ -64,9 +64,15 @@ phones alike. Every group below is enabled by default:
 | `phoning` | `com.sec.android.RilServiceModeApp` | Radio interface service-mode support |
 | `phoning` | `com.sec.app.RilErrorNotifier` | Radio interface error notifications |
 | `phoning` | `com.sec.vsim.ericssonnsds.webapp` | Virtual-SIM / carrier provisioning support |
+| `phoning` | `com.google.android.dialer` | Google Phone dialer |
+| `phoning` | `com.android.imsserviceentitlement` | IMS carrier entitlement for VoLTE and Wi-Fi calling |
+| `phoning` | `com.mediatek.ims` | MediaTek IMS stack for VoLTE and Wi-Fi calling |
+| `phoning` | `com.mediatek.datachannel.service` | IMS data-channel bridge used by VoLTE, Wi-Fi calling and RCS |
+| `phoning` | `com.xiaomi.simactivate.service` | Xiaomi SIM activation and phone-number verification |
 
-Pick specific groups with `--keep <groups>` (repeatable or comma-separated), drop the
-protection entirely with `--no-keep`, or print the list with `--list-keep`. On Windows
+Pick specific groups with `--keep <groups>` (repeatable or comma-separated), disable
+the named groups with `--no-keep`, or print the list with `--list-keep`. Runtime default
+and hard safety protection still apply. On Windows
 the flags are `-Keep`, `-NoKeep`, `-ListKeep` and `-NoSettings`. Kept packages are printed
 with `(kept)` during a run and are skipped before any `pm uninstall` / `pm disable-user`
 call, so they are never touched.
@@ -89,7 +95,7 @@ Nothing here needs root.
 > A package is only touched if it is actually installed on your device, so the real
 > number of changes is usually lower than the table below.
 
-## Tier 1 - light (30 packages)
+## Tier 1 - light (29 packages)
 
 Safe for anyone. Telemetry, diagnostics, factory test tools, AR toys and preloads.
 
@@ -103,7 +109,6 @@ Safe for anyone. Telemetry, diagnostics, factory test tools, AR toys and preload
 | `com.samsung.android.svcagent` | Samsung | Remote-support agent for Samsung service centres |
 | `com.google.android.feedback` | Google | Google feedback / crash-reporting uploader |
 | `com.google.mainline.telemetry` | Google | Mainline (system module) telemetry uploader |
-| `com.google.android.gms.location.history` | Google | Location History background service |
 | `com.google.android.partnersetup` | Google | Installs preload/partner apps on first boot and after updates |
 | `com.google.android.printservice.recommendation` | Google | Suggests printer plugins you never asked for |
 | `com.google.android.apps.carrier.carrierwifi` | Google | Carrier Wi-Fi auto-connect (meaningless on a Wi-Fi-only tablet) |
@@ -134,6 +139,7 @@ ARCore, Link-to-Windows and the Samsung TTS language packs (which are large).
 
 | Package | Category | What it is / why it can go |
 |---|---|---|
+| `com.google.android.gms.location.history` | Google | Location History background service (balanced only because removing it disables Google Timeline) |
 | `com.samsung.android.bixby.agent` | Samsung | Bixby voice assistant |
 | `com.samsung.android.bixby.wakeup` | Samsung | Always-listening "Hi Bixby" wake word service |
 | `com.samsung.android.bixbyvision.framework` | Samsung | Bixby Vision framework |
@@ -281,6 +287,39 @@ you pass `--no-keep`.
 | `com.android.mms.service` | AOSP | MMS service |
 | `com.android.simappdialog` | AOSP | SIM application dialog |
 
+## Exact-device additions
+
+These rows load only after `profiles/devices.tsv` matches manufacturer, codename and
+model. They are never guessed from the brand alone.
+
+### `redmi-10` (23 packages)
+
+| Package | Category | What it is / why it can go |
+|---|---|---|
+| `com.miui.analytics` | Xiaomi | Xiaomi Analytics telemetry client; runs in the background and uploads usage events |
+| `com.miui.msa.global` | Xiaomi | MIUI System Ads service (MSA); supplies advertising and recommendations across MIUI |
+| `com.miui.daemon` | Xiaomi | MIUI diagnostics and telemetry daemon; not required for core phone functions |
+| `com.miui.bugreport` | Xiaomi | Services & Feedback bug-report uploader |
+| `com.miui.miservice` | Xiaomi | Xiaomi Services & Feedback client |
+| `com.xiaomi.mtb` | Factory | MediaTek/Xiaomi modem factory-test harness (MTB), not part of normal telephony |
+| `com.xiaomi.payment` | Xiaomi | Legacy Mi Credit/Payment stub on the Global ROM |
+| `org.mipay.android.manager` | Xiaomi | Mi Pay service stub on the Global ROM |
+| `com.xiaomi.glgm` | Xiaomi | Xiaomi Games / game recommendations client |
+| `com.xiaomi.mipicks` | Xiaomi | GetApps (Mi Picks), Xiaomi's secondary app store and recommendation client |
+| `com.miui.cleaner` | Xiaomi | MIUI Cleaner app and its resident background process |
+| `com.xiaomi.cameratools` | Factory | Hidden CameraTools factory/diagnostic package, not the Camera app |
+| `com.miui.phrase` | Xiaomi | MIUI Frequent Phrases feature |
+| `com.miui.qr` | Xiaomi | Standalone MIUI QR scanner |
+| `com.xiaomi.barrage` | Xiaomi | Bullet-screen notification feature; automatically kept if its notification listener is enabled |
+| `com.miui.player` | Xiaomi | Mi Music player |
+| `com.miui.videoplayer` | Xiaomi | Mi Video player and recommendations client |
+| `com.miui.fm` | Xiaomi | MIUI FM Radio user interface |
+| `com.miui.fmservice` | Xiaomi | FM Radio background service |
+| `com.miui.screenrecorder` | Xiaomi | MIUI Screen Recorder |
+| `com.xiaomi.scanner` | Xiaomi | Mi Scanner document/QR app |
+| `com.duokan.phone.remotecontroller` | Xiaomi | Mi Remote controller; data-installed, so use --disable-preloads to keep it restorable |
+| `com.miuix.editor` | Xiaomi | Optional MIUI text-action editor |
+
 ## Extras - `--extras` only (17 packages)
 
 **Not** part of any profile. These break Secure Folder, OTA security updates
@@ -308,21 +347,21 @@ and the Samsung account. Only use them if you understand that.
 
 ## System settings
 
-Applied with `settings put <namespace> <key> <value>` and restored from
-`backups/original-settings.tsv`.
+Applied with `settings put <namespace> <key> <value>` and restored from the connected
+device's isolated backup history.
 
-| Tier | Setting | Value | Why |
-|---|---|---|---|
-| 1 | `global.window_animation_scale` | `0.5` | Halve the stock 1.0x window-open animation duration |
-| 1 | `global.transition_animation_scale` | `0.5` | Halve the stock 1.0x transition animation duration |
-| 1 | `global.animator_duration_scale` | `0.5` | Halve the stock 1.0x animator duration - the biggest "feels faster" win |
-| 1 | `global.cached_apps_freezer` | `enabled` | Freeze cached background apps instead of keeping them in RAM |
-| 1 | `system.peak_refresh_rate` | `90` | Never cap the 90 Hz panel |
-| 2 | `global.sem_enhanced_cpu_responsiveness` | `1` | Samsung "Processing speed: High" - keeps the CPU scheduler in performance mode |
-| 2 | `global.wifi_scan_always_enabled` | `0` | Stop background Wi-Fi scanning when Wi-Fi is off (battery + fewer wakeups) |
-| 2 | `global.ble_scan_always_enabled` | `0` | Stop background Bluetooth LE scanning when Bluetooth is off |
-| 2 | `system.min_refresh_rate` | `60` | Never drop below 60 Hz, so scrolling stays smooth (no 30 Hz idle steps) |
-| 3 | `system.min_refresh_rate` | `90` | Lock the panel at 90 Hz at all times - smoothest, costs some battery |
+| Tier | Setting | Value | Scope | Why |
+|---|---|---|---|---|
+| 1 | `global.window_animation_scale` | `0.5` | all | Halve the stock 1.0x window-open animation duration |
+| 1 | `global.transition_animation_scale` | `0.5` | all | Halve the stock 1.0x transition animation duration |
+| 1 | `global.animator_duration_scale` | `0.5` | all | Halve the stock 1.0x animator duration - the biggest "feels faster" win |
+| 1 | `global.cached_apps_freezer` | `enabled` | all | Freeze cached background apps instead of keeping them in RAM |
+| 1 | `system.peak_refresh_rate` | `__MAX_REFRESH__` | all | Use the highest refresh rate actually advertised by the connected display |
+| 2 | `global.sem_enhanced_cpu_responsiveness` | `1` | samsung | Samsung "Processing speed: High" - keeps the CPU scheduler in performance mode |
+| 2 | `global.wifi_scan_always_enabled` | `0` | all | Stop background Wi-Fi scanning when Wi-Fi is off (battery + fewer wakeups) |
+| 2 | `global.ble_scan_always_enabled` | `0` | all | Stop background Bluetooth LE scanning when Bluetooth is off |
+| 2 | `system.min_refresh_rate` | `__BALANCED_MIN_REFRESH__` | all | Keep the display at 60 Hz or above without exceeding its advertised maximum |
+| 3 | `system.min_refresh_rate` | `__MAX_REFRESH__` | all | Lock the panel at its advertised maximum - smoothest, costs some battery |
 
 ### What each one does
 
@@ -338,10 +377,9 @@ state in RAM. With the freezer enabled, they are frozen (CPU and wakelocks stopp
 instead of being allowed to run in the background. Better idle battery, no downside
 for normal use.
 
-**`peak_refresh_rate` / `min_refresh_rate`** - the S10 FE+ panel supports 30, 48, 60
-and 90 Hz. By default it drops to 30 Hz aggressively, which makes scrolling look
-choppy. `peak=90` stops any cap; `min=60` keeps it at 60 Hz or above; `min=90` locks
-it at 90 Hz (smoothest, costs battery).
+**`peak_refresh_rate` / `min_refresh_rate`** - the scripts read the modes advertised by
+the connected display and resolve `__MAX_REFRESH__` dynamically. Balanced never asks
+for more than 60 Hz as its minimum; aggressive locks the advertised maximum.
 
 **`sem_enhanced_cpu_responsiveness` (tier 2)** - the value behind
 Settings → Battery → Processing speed. `0` = optimised, `1` = high, `2` = maximum.

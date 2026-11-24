@@ -124,8 +124,8 @@ These stop OTA update checks/downloads and are intentionally outside every norma
 
 ## Watch-safe settings
 
-The 90 Hz refresh-rate and Samsung CPU-performance settings used on the tablet are not valid
-for the Watch6's fixed 60 Hz panel and are never loaded. Only these settings are applied:
+Phone/tablet refresh-rate and Samsung CPU-performance settings are not loaded on the
+Watch6's fixed 60 Hz panel. Only these watch settings are applied:
 
 | Tier | Setting | Value | Why |
 |---|---|---|---|

@@ -1,4 +1,4 @@
-# tier	namespace	key	value	note
+# tier	namespace	key	value	note	scope
 # ---------------------------------------------------------------------------------------------------
 # Applied with:  settings put <namespace> <key> <value>
 # Restored from the backup that is written before anything is changed.
@@ -9,13 +9,13 @@
 1	global	transition_animation_scale	0.5	Halve the stock 1.0x transition animation duration
 1	global	animator_duration_scale	0.5	Halve the stock 1.0x animator duration - the biggest "feels faster" win
 1	global	cached_apps_freezer	enabled	Freeze cached background apps instead of keeping them in RAM
-1	system	peak_refresh_rate	90	Never cap the 90 Hz panel
+1	system	peak_refresh_rate	__MAX_REFRESH__	Use the highest refresh rate actually advertised by the connected display	all
 
 # ---------------------------------------------------------------- TIER 2: performance & battery
-2	global	sem_enhanced_cpu_responsiveness	1	Samsung "Processing speed: High" - keeps the CPU scheduler in performance mode
+2	global	sem_enhanced_cpu_responsiveness	1	Samsung "Processing speed: High" - keeps the CPU scheduler in performance mode	samsung
 2	global	wifi_scan_always_enabled	0	Stop background Wi-Fi scanning when Wi-Fi is off (battery + fewer wakeups)
 2	global	ble_scan_always_enabled	0	Stop background Bluetooth LE scanning when Bluetooth is off
-2	system	min_refresh_rate	60	Never drop below 60 Hz, so scrolling stays smooth (no 30 Hz idle steps)
+2	system	min_refresh_rate	__BALANCED_MIN_REFRESH__	Keep the display at 60 Hz or above without exceeding its advertised maximum	all
 
 # ---------------------------------------------------------------- TIER 3: maximum smoothness
-3	system	min_refresh_rate	90	Lock the panel at 90 Hz at all times - smoothest, costs some battery
+3	system	min_refresh_rate	__MAX_REFRESH__	Lock the panel at its advertised maximum - smoothest, costs some battery	all

@@ -1,9 +1,9 @@
 #Requires -Version 5.1
 <#
-  Universal Samsung Optimiser - Windows driver
+  Universal Android Optimiser - Windows driver
   ---------------------------------------------------------------
-  Debloats and tunes supported Samsung Galaxy tablets and watches
-  over ADB. Every change is reversible.
+  Debloats and tunes exactly matched Android phones, tablets and watches
+  over ADB. Every change is recorded and reversible.
 
   Usage:  .\run.ps1 [light|balanced|aggressive] [options]
   Help:   .\run.ps1 -Help
@@ -12,7 +12,7 @@
 #>
 
 $ErrorActionPreference = 'Continue'
-$Version = '1.3.1'
+$Version = '1.4.0'
 $Root    = Split-Path -Parent $PSScriptRoot
 $Profiles = Join-Path $Root 'profiles'
 $BackupRoot = Join-Path $Root 'backups'
@@ -50,6 +50,17 @@ $script:Tmp       = Join-Path ([System.IO.Path]::GetTempPath()) ("samsungopt-" +
 $script:Manifest  = ''
 $script:SettingsManifest = ''
 $script:LastBackup = ''
+$script:Manufacturer = ''
+$script:MarketName = ''
+$script:Build = ''
+$script:SecurityPatch = ''
+$script:Skin = ''
+$script:DeviceProfile = ''
+$script:DeviceProfileName = ''
+$script:DevicePackageFile = ''
+$script:MaxRefreshRate = ''
+$script:RuntimeProtected = @{}
+$script:RuntimeProtectionReason = @{}
 
 # ------------------------------------------------------------------ output
 function Say    { param([string]$Text = '') Write-Host $Text }
@@ -63,7 +74,7 @@ function Die    { param([string]$Text) Fail $Text; exit 1 }
 
 function Show-Usage {
   @"
-Universal Samsung Optimiser v$Version
+Universal Android Optimiser v$Version
 
   .\run.ps1 <profile> [options]      apply a profile
   .\run.ps1 -Restore [dir]           undo the last run (or a specific backup)
@@ -71,12 +82,12 @@ Universal Samsung Optimiser v$Version
   .\run.ps1 -Compare [dir]           show the before/after statistics of a run
 
 Profiles
-  light         safest telemetry, diagnostics and factory leftovers
-  balanced      + optional Samsung/Google background features
-  aggressive    + replaceable user-facing apps (Teams/Gmail/Office/phone kept)
+  light         telemetry, diagnostics, ads and factory leftovers
+  balanced      + optional OEM/Google background features
+  aggressive    + replaceable user-facing apps (defaults/phone kept)
 
-  A Galaxy Watch is detected automatically and uses its own conservative,
-  device-tested package list. Run -List to see both device families.
+  Galaxy Watch and exact Redmi 10 profiles are detected automatically.
+  Run -List to see base, exact-device and watch profiles.
 
 Options
   -Profile <name>   same as passing the profile as the first argument
@@ -89,7 +100,7 @@ Options
   -Keep <groups>    keep these app groups installed (default: all of them)
                     groups: teams, samsung-internet, office, gmail, messages, phoning
                     repeatable or comma-separated; "none" disables keeping
-  -NoKeep           original aggressive behaviour - remove every listed package
+  -NoKeep           disable named keep groups; hard/default-app safety still wins
   -ListKeep         print the keep groups and their packages
   -Trim             clear app caches
   -Dexopt           run a background dexopt job now (slow, optimises app start-up)
@@ -117,6 +128,7 @@ function Find-Adb {
     "$env:USERPROFILE\AppData\Local\Android\Sdk\platform-tools\adb.exe",
     "$env:ANDROID_HOME\platform-tools\adb.exe",
     "$env:ANDROID_SDK_ROOT\platform-tools\adb.exe",
+    "$env:USERPROFILE\Downloads\platform-tools\adb.exe",
     "C:\platform-tools\adb.exe",
     "C:\adb\adb.exe",
     "C:\Program Files\Android\platform-tools\adb.exe"
@@ -136,6 +148,12 @@ function Format-OneUi {
   return $Value
 }
 
+function Format-Miui {
+  param([string]$Value)
+  if ($Value -match '^V(\d)(\d)(\d)$') { return "$($Matches[1])$($Matches[2]).$($Matches[3])" }
+  return $Value
+}
+
 function Invoke-Adb {
   param([string[]]$Arguments, [switch]$Quiet)
   $a = @()
@@ -151,11 +169,52 @@ function Invoke-Adb {
 
 function Invoke-Shell { param([string]$Command) Invoke-Adb -Arguments @('shell', $Command) -Quiet }
 
+function Resolve-ExactDeviceProfile {
+  $script:DeviceProfile = ''
+  $script:DeviceProfileName = ''
+  $script:DevicePackageFile = ''
+  if ($script:DeviceClass -eq 'watch') { return }
+  $file = Join-Path $Profiles 'devices.tsv'
+  if (-not (Test-Path $file)) { return }
+  foreach ($line in (Get-Content -LiteralPath $file)) {
+    if (-not $line.Trim() -or $line -match '^\s*#') { continue }
+    $f = $line -split "`t"
+    if ($f.Count -lt 6) { continue }
+    if ($f[1] -ieq $script:Manufacturer -and $f[2] -ieq $script:Device -and $f[3] -ieq $script:Model) {
+      $script:DeviceProfile = $f[0]
+      $script:DeviceProfileName = $f[4]
+      if ($f[5] -and $f[5] -ne '-') { $script:DevicePackageFile = Join-Path $Profiles $f[5] }
+      return
+    }
+  }
+}
+
+function Get-MaxRefreshRate {
+  $raw = Invoke-Shell 'dumpsys display'
+  $max = 0.0
+  foreach ($m in [regex]::Matches($raw, '(?:fps|refreshRate)=([0-9]+(?:\.[0-9]+)?)')) {
+    $v = 0.0
+    if ([double]::TryParse($m.Groups[1].Value, [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture, [ref]$v) -and
+        $v -ge 30 -and $v -le 240 -and $v -gt $max) { $max = $v }
+  }
+  if ($max -le 0) {
+    $fallback = Invoke-Shell 'settings get system peak_refresh_rate'
+    [double]::TryParse($fallback, [Globalization.NumberStyles]::Float,
+      [Globalization.CultureInfo]::InvariantCulture, [ref]$max) | Out-Null
+  }
+  if ($max -le 0) { return '' }
+  if ([Math]::Abs($max - [Math]::Round($max)) -lt 0.01) { return ([int][Math]::Round($max)).ToString() }
+  return $max.ToString('0.##', [Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Set-DeviceProfile {
   $script:DeviceClass = 'tablet'
-  $script:DeviceLabel = 'Galaxy tablet / Android'
+  $script:DeviceLabel = 'Android phone / tablet'
   $script:ProfileDir = $Profiles
-  $script:Backups = $BackupRoot
+  $safeSerial = $script:Serial -replace '[^A-Za-z0-9._-]', '_'
+  if (-not $safeSerial) { $safeSerial = 'unknown-android' }
+  $script:Backups = Join-Path $BackupRoot "device-$safeSerial"
 
   if ((($script:Characteristics -split ',') -contains 'watch') -or $script:WatchFeature) {
     $script:DeviceClass = 'watch'
@@ -169,6 +228,7 @@ function Set-DeviceProfile {
   $script:PackagesFile = Join-Path $script:ProfileDir 'packages.tsv'
   $script:SettingsFile = Join-Path $script:ProfileDir 'settings.tsv'
   $script:ExtrasFile = Join-Path $script:ProfileDir 'extras.tsv'
+  Resolve-ExactDeviceProfile
 }
 
 function Get-Device {
@@ -181,9 +241,9 @@ function Get-Device {
   }
   if ($ids.Count -eq 0) {
     Fail 'No authorised device found.'
-    Say  '  1. Enable Developer options (Settings > About tablet > Software information > tap Build number 7x)'
+    Say  '  1. Enable Developer options (Settings > About phone/tablet > Software information > tap Build number 7x)'
     Say  '  2. Turn on USB debugging'
-    Say  '  3. Reconnect the cable and accept the RSA prompt on the tablet'
+    Say  '  3. Reconnect and accept the RSA prompt on the device'
     exit 1
   }
   if (-not $script:Serial) {
@@ -193,14 +253,24 @@ function Get-Device {
   $null = Invoke-Adb -Arguments @('wait-for-device') -Quiet
   $script:Model   = Invoke-Shell 'getprop ro.product.model'
   $script:Device  = Invoke-Shell 'getprop ro.product.device'
+  $script:Manufacturer = Invoke-Shell 'getprop ro.product.manufacturer'
+  $script:MarketName = Invoke-Shell 'getprop ro.product.marketname'
   $script:Release = Invoke-Shell 'getprop ro.build.version.release'
+  $script:Build = Invoke-Shell 'getprop ro.build.version.incremental'
+  $script:SecurityPatch = Invoke-Shell 'getprop ro.build.version.security_patch'
   $script:Characteristics = Invoke-Shell 'getprop ro.build.characteristics'
   $script:HardwareId = Invoke-Shell 'getprop ro.serialno'
   $script:WatchFeature = ((Invoke-Shell 'pm has-feature android.hardware.type.watch') -eq 'true')
   Set-DeviceProfile
-  $oneui          = Format-OneUi (Invoke-Shell 'getprop ro.build.version.oneui')
-  $suffix = if ($oneui) { " / One UI $oneui" } else { '' }
-  Info "Device: $($script:Model) ($($script:Device)) - Android $($script:Release)$suffix [$($script:DeviceLabel)]"
+  $oneui = Format-OneUi (Invoke-Shell 'getprop ro.build.version.oneui')
+  $miui = Format-Miui (Invoke-Shell 'getprop ro.miui.ui.version.name')
+  $script:Skin = if ($oneui) { "One UI $oneui" } elseif ($miui) { "MIUI $miui" } else { '' }
+  $script:MaxRefreshRate = Get-MaxRefreshRate
+  $name = if ($script:MarketName) { $script:MarketName } elseif ($script:DeviceProfileName) { $script:DeviceProfileName } else { $script:Model }
+  $skinSuffix = if ($script:Skin) { " / $($script:Skin)" } else { '' }
+  $hzSuffix = if ($script:MaxRefreshRate) { " / max $($script:MaxRefreshRate) Hz" } else { '' }
+  Info "Device: $name [$($script:Model)] ($($script:Device)) - Android $($script:Release)$skinSuffix$hzSuffix [$($script:DeviceLabel)]"
+  if ($script:DeviceProfile) { Ok "matched device profile: $($script:DeviceProfile)" }
 }
 
 # ------------------------------------------------------------------ users
@@ -293,6 +363,33 @@ function Get-ProfileRows {
   return $rows
 }
 
+function Get-PackageRows {
+  param([int]$MaxTier)
+  $rows = @(Get-ProfileRows -File $script:PackagesFile -MaxTier $MaxTier)
+  if ($script:DevicePackageFile -and (Test-Path $script:DevicePackageFile)) {
+    $rows += @(Get-ProfileRows -File $script:DevicePackageFile -MaxTier $MaxTier)
+  }
+  return $rows
+}
+
+function Resolve-SettingValue {
+  param([string]$Value)
+  switch ($Value) {
+    '__MAX_REFRESH__' {
+      if (-not $script:MaxRefreshRate) { if (-not $script:Manufacturer) { return $Value }; return $null }
+      return $script:MaxRefreshRate
+    }
+    '__BALANCED_MIN_REFRESH__' {
+      if (-not $script:MaxRefreshRate) { if (-not $script:Manufacturer) { return $Value }; return $null }
+      $max = 0.0
+      if (-not [double]::TryParse($script:MaxRefreshRate, [Globalization.NumberStyles]::Float,
+          [Globalization.CultureInfo]::InvariantCulture, [ref]$max)) { return $null }
+      return ([Math]::Min(60.0, $max)).ToString('0.##', [Globalization.CultureInfo]::InvariantCulture)
+    }
+    default { return $Value }
+  }
+}
+
 function Get-SettingRows {
   param([int]$MaxTier, [string]$File = $script:SettingsFile)
   $rows = @()
@@ -300,9 +397,70 @@ function Get-SettingRows {
     if ($line -match '^\s*#') { continue }
     $f = $line -split "`t"
     if ($f.Count -lt 5) { continue }
-    if ([int]$f[0] -le $MaxTier) { $rows += ,$f }
+    if ([int]$f[0] -gt $MaxTier) { continue }
+    $scope = if ($f.Count -ge 6) { $f[5].Trim().ToLowerInvariant() } else { 'all' }
+    if ($script:Manufacturer -and $scope -and $scope -ne 'all' -and
+        $scope -ne $script:Manufacturer.ToLowerInvariant() -and $scope -ne $script:DeviceProfile) { continue }
+    $value = Resolve-SettingValue $f[3]
+    if ($null -eq $value -or $value -eq '') { continue }
+    $f[3] = $value
+    $rows += ,$f
   }
   return $rows
+}
+
+# ------------------------------------------------------------------ active/default app protection
+function Add-RuntimeProtected {
+  param([string]$Package, [string]$Reason)
+  $Package = ($Package -split '/')[0].Trim()
+  if ($Package -match '^[A-Za-z][A-Za-z0-9_.]+$') {
+    $script:RuntimeProtected[$Package] = $true
+    if (-not $script:RuntimeProtectionReason.ContainsKey($Package)) { $script:RuntimeProtectionReason[$Package] = $Reason }
+  }
+}
+
+function Initialize-RuntimeProtection {
+  param([int[]]$Users)
+  $script:RuntimeProtected = @{}
+  $script:RuntimeProtectionReason = @{}
+  if ($script:DeviceClass -eq 'watch') { return }
+  $roles = [ordered]@{
+    'android.app.role.HOME' = 'active launcher'; 'android.app.role.SMS' = 'default SMS app'
+    'android.app.role.DIALER' = 'default dialer'; 'android.app.role.BROWSER' = 'default browser'
+  }
+  foreach ($u in $Users) {
+    foreach ($role in $roles.Keys) {
+      foreach ($line in ((Invoke-Shell "cmd role get-role-holders --user $u $role") -split "`n")) { Add-RuntimeProtected $line $roles[$role] }
+    }
+    $ime = Invoke-Shell "settings --user $u get secure default_input_method"
+    if ($ime -and $ime -ne 'null') { Add-RuntimeProtected $ime 'active keyboard' }
+    foreach ($item in @(
+      @{ Key = 'enabled_accessibility_services'; Reason = 'enabled accessibility service' },
+      @{ Key = 'enabled_notification_listeners'; Reason = 'enabled notification listener' }
+    )) {
+      $value = Invoke-Shell "settings --user $u get secure $($item.Key)"
+      if ($value -and $value -ne 'null') {
+        foreach ($component in ($value -split ':')) { Add-RuntimeProtected $component $item.Reason }
+      }
+    }
+  }
+  # Secure settings can retain stale components for apps already absent. Only
+  # protect and verify packages that exist before this run.
+  $installed = @{}
+  foreach ($u in $Users) {
+    foreach ($line in ((Invoke-Shell "pm list packages --user $u") -split "`n")) {
+      if ($line -match '^package:(.+)$') { $installed[$Matches[1].Trim()] = $true }
+    }
+  }
+  foreach ($p in @($script:RuntimeProtected.Keys)) {
+    if (-not $installed.ContainsKey($p)) { $script:RuntimeProtected.Remove($p); $script:RuntimeProtectionReason.Remove($p) }
+  }
+}
+
+function Get-ProtectionReason {
+  param([string]$Package)
+  if ($script:RuntimeProtectionReason.ContainsKey($Package)) { return $script:RuntimeProtectionReason[$Package] }
+  return 'safety blocklist'
 }
 
 # ------------------------------------------------------------------ safety net
@@ -324,9 +482,18 @@ function Test-Protected {
     'com.samsung.android.honeyboard','com.samsung.android.biometrics.app.setting',
     'com.samsung.android.location','com.android.externalstorage',
     'com.android.intentresolver','com.android.vpndialogs','com.android.mtp',
-    'com.samsung.android.mtp'
+    'com.samsung.android.mtp','com.google.android.inputmethod.latin','com.google.android.dialer',
+    'com.android.updater','com.lbe.security.miui','com.miui.home','com.miui.system',
+    'com.miui.core','com.miui.rom','com.miui.securitycenter','com.miui.securitycore',
+    'com.miui.securityadd','com.miui.powerkeeper','com.miui.global.packageinstaller',
+    'com.miui.notification','com.miui.miwallpaper','com.xiaomi.misettings',
+    'com.xiaomi.discover','com.xiaomi.finddevice','com.xiaomi.micloud.sdk',
+    'com.xiaomi.account','com.xiaomi.xmsf','com.xiaomi.xmsfkeeper','com.xiaomi.joyose',
+    'com.miui.systemui.carriers.overlay','android.miui.home.launcher.res',
+    'com.android.phone.overlay.miui','com.android.server.telecom.overlay.miui',
+    'com.android.carrierconfig.overlay.miui'
   )
-  if ($protected -contains $Package) { return $true }
+  if (($protected -contains $Package) -or $script:RuntimeProtected.ContainsKey($Package)) { return $true }
   if ($script:DeviceClass -eq 'watch') {
     $watchProtected = @(
       'com.samsung.android.wearable.sysui','com.google.android.apps.wearable.systemui',
@@ -473,11 +640,28 @@ function Set-Tweak {
   Add-Content -LiteralPath (Join-Path $script:Backups 'original-settings.tsv') -Value ("{0}`t{1}`t{2}`t{3}" -f $Ns, $Key, $old, $Note) -Encoding ASCII
 
   if ($Value -eq '__DELETE__') {
-    $null = Invoke-Shell "settings delete $Ns $Key"
+    $result = Invoke-Adb -Arguments @('shell', "settings delete $Ns $Key")
   } else {
-    $null = Invoke-Shell "settings put $Ns $Key $Value"
+    $result = Invoke-Adb -Arguments @('shell', "settings put $Ns $Key $Value")
   }
-  Ok "$Ns/$Key = $Value  (was $old)"
+  $readback = Invoke-Shell "settings get $Ns $Key"
+  $applied = if ($Value -eq '__DELETE__') {
+    (-not $readback -or $readback -eq 'null')
+  } else {
+    $same = ($readback -eq $Value)
+    $wantNumber = 0.0; $gotNumber = 0.0
+    if (-not $same -and
+        [double]::TryParse($Value, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$wantNumber) -and
+        [double]::TryParse($readback, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$gotNumber)) {
+      $same = ([Math]::Abs($wantNumber - $gotNumber) -lt 0.001)
+    }
+    $same
+  }
+  if ($applied) { Ok "$Ns/$Key = $Value  (was $old)" }
+  else {
+    $detail = if ($result) { " - $result" } else { '' }
+    Warn "$Ns/$Key was not applied (readback: $readback)$detail"
+  }
 }
 
 function Restore-Tweak {
@@ -502,7 +686,7 @@ function New-Backup {
   Set-Content -LiteralPath $script:SettingsManifest -Value '' -Encoding ASCII
   $keepInfo = if ($script:DeviceClass -eq 'watch') { 'not-applicable' } else { (Get-KeepGroupList) -join ',' }
   $info = @(
-    "Universal Samsung Optimiser v$Version",
+    "Universal Android Optimiser v$Version",
     "date      : $(Get-Date)",
     "profile   : $($script:Profile)",
     "keep      : $keepInfo",
@@ -512,11 +696,17 @@ function New-Backup {
     "dexopt    : $($script:Dexopt)",
     "reboot    : $($script:Reboot)",
     "serial    : $($script:Serial)",
+    "profile-id: $($script:DeviceProfile)",
+    "maker     : $($script:Manufacturer)",
     "model     : $($script:Model)",
     "device    : $($script:Device)",
     "class     : $($script:DeviceClass)",
     "hardware  : $($script:HardwareId)",
     "android   : $($script:Release)",
+    "skin      : $($script:Skin)",
+    "build     : $($script:Build)",
+    "security  : $($script:SecurityPatch)",
+    "max-hz    : $($script:MaxRefreshRate)",
     "host      : $([System.Environment]::OSVersion.VersionString)"
   )
   Set-Content -LiteralPath (Join-Path $dir 'info.txt') -Value $info -Encoding ASCII
@@ -533,8 +723,18 @@ function Get-LatestBackup {
 # ------------------------------------------------------------------ statistics
 function Get-DeviceStats {
   $s = [ordered]@{}
-  $s['model']   = Invoke-Shell 'getprop ro.product.model'
+  $s['manufacturer'] = Invoke-Shell 'getprop ro.product.manufacturer'
+  $s['model'] = Invoke-Shell 'getprop ro.product.model'
+  $s['device'] = Invoke-Shell 'getprop ro.product.device'
   $s['android'] = Invoke-Shell 'getprop ro.build.version.release'
+  $s['build'] = Invoke-Shell 'getprop ro.build.version.incremental'
+  $s['security_patch'] = Invoke-Shell 'getprop ro.build.version.security_patch'
+  $s['display.max_refresh_hz'] = $script:MaxRefreshRate
+  $s['setting.window_animation_scale'] = Invoke-Shell 'settings get global window_animation_scale'
+  $s['setting.transition_animation_scale'] = Invoke-Shell 'settings get global transition_animation_scale'
+  $s['setting.animator_duration_scale'] = Invoke-Shell 'settings get global animator_duration_scale'
+  $s['setting.peak_refresh_rate'] = Invoke-Shell 'settings get system peak_refresh_rate'
+  $s['setting.min_refresh_rate'] = Invoke-Shell 'settings get system min_refresh_rate'
 
   $mem = Invoke-Shell 'cat /proc/meminfo'
   foreach ($pair in @(@('mem_total_kb', 'MemTotal'), @('mem_free_kb', 'MemFree'), @('mem_available_kb', 'MemAvailable'))) {
@@ -555,6 +755,20 @@ function Get-DeviceStats {
     $disabled  = @((Invoke-Shell "pm list packages -d --user $u") -split "`n" | Where-Object { $_ -match '^package:' })
     $s["packages.user.$u"] = $installed.Count
     $s["disabled.user.$u"] = $disabled.Count
+    $installedSet = @{}
+    foreach ($pkgLine in $installed) { if ($pkgLine -match '^package:(.+)$') { $installedSet[$Matches[1].Trim()] = $true } }
+    $tier = Get-Tier $script:Profile
+    $targeted = if ($tier -gt 0) { @(Get-PackageRows -MaxTier $tier) } else { @() }
+    if ($script:Extras) { $targeted += @(Get-ProfileRows -File $script:ExtrasFile -MaxTier 9) }
+    $targetCount = 0
+    foreach ($r in $targeted) { if ($installedSet.ContainsKey($r[1])) { $targetCount++ } }
+    $s["targeted.user.$u"] = $targetCount
+    $protectedSet = @{}
+    foreach ($p in @(Get-KeepPackages)) { $protectedSet[$p] = $true }
+    foreach ($p in $script:RuntimeProtected.Keys) { $protectedSet[$p] = $true }
+    $protectedCount = 0
+    foreach ($p in $protectedSet.Keys) { if ($installedSet.ContainsKey($p)) { $protectedCount++ } }
+    $s["protected.user.$u"] = $protectedCount
   }
   return $s
 }
@@ -581,6 +795,65 @@ function Format-Gb {
   return ('{0:N1} GB' -f ($Kb / 1MB))
 }
 
+function Get-StatsDiffRows {
+  param($BeforeStats, $AfterStats)
+  $rows = @()
+  foreach ($k in $AfterStats.Keys) {
+    if ($k -notmatch '_kb$' -and $k -notmatch '^(packages|disabled|targeted|protected)\.user\.' -and
+        $k -notmatch '^setting\.' -and $k -ne 'display.max_refresh_hz') { continue }
+    $beforeRaw = if ($BeforeStats.Contains($k)) { [string]$BeforeStats[$k] } else { 'n/a' }
+    $afterRaw = [string]$AfterStats[$k]
+    $bv = 0.0; $av = 0.0
+    $beforeNumeric = [double]::TryParse($beforeRaw, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$bv)
+    $afterNumeric = [double]::TryParse($afterRaw, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$av)
+    if ($k -match '_kb$' -and $beforeNumeric -and $afterNumeric) {
+      $d = $av - $bv; $bs = Format-Gb $bv; $as = Format-Gb $av
+      $sign = if ($d -gt 0) { '+' } else { '' }; $cs = '{0}{1:N1} GB' -f $sign, ($d / 1MB)
+    } elseif ($k -match '^(packages|disabled|targeted|protected)\.user\.' -and $beforeNumeric -and $afterNumeric) {
+      $d = $av - $bv; $bs = '{0}' -f [long]$bv; $as = '{0}' -f [long]$av
+      $sign = if ($d -gt 0) { '+' } else { '' }; $cs = '{0}{1}' -f $sign, [long]$d
+    } else {
+      $bs = $beforeRaw; $as = $afterRaw
+      if ($beforeNumeric -and $afterNumeric) {
+        $d = $av - $bv; $sign = if ($d -gt 0) { '+' } else { '' }
+        $cs = if ([Math]::Abs($d) -lt 0.0001) { 'unchanged' } else { '{0}{1:0.##}' -f $sign, $d }
+      } else { $cs = if ($beforeRaw -eq $afterRaw) { 'unchanged' } else { 'changed' } }
+    }
+    $label = switch -Regex ($k) {
+      '^mem_total_kb$' { 'Total RAM'; break }; '^mem_available_kb$' { 'Available RAM'; break }
+      '^mem_free_kb$' { 'Free RAM'; break }; '^storage_total_kb$' { 'Storage total'; break }
+      '^storage_used_kb$' { 'Storage used'; break }; '^storage_free_kb$' { 'Storage free'; break }
+      '^packages\.user\.(.+)$' { "Installed packages (user $($Matches[1]))"; break }
+      '^disabled\.user\.(.+)$' { "Disabled packages (user $($Matches[1]))"; break }
+      '^targeted\.user\.(.+)$' { "Profile packages present (user $($Matches[1]))"; break }
+      '^protected\.user\.(.+)$' { "Protected packages present (user $($Matches[1]))"; break }
+      '^display\.max_refresh_hz$' { 'Display maximum'; break }
+      '^setting\.window_animation_scale$' { 'Window animation scale'; break }
+      '^setting\.transition_animation_scale$' { 'Transition animation scale'; break }
+      '^setting\.animator_duration_scale$' { 'Animator duration scale'; break }
+      '^setting\.peak_refresh_rate$' { 'Peak refresh-rate setting'; break }
+      '^setting\.min_refresh_rate$' { 'Minimum refresh-rate setting'; break }
+      default { $k }
+    }
+    $rows += [pscustomobject]@{ Key=$k; Label=$label; Before=$bs; After=$as; Change=$cs }
+  }
+  return $rows
+}
+
+function Save-BeforeAfterReport {
+  param([string]$Before, [string]$After, [string]$Directory)
+  if (-not (Test-Path $Before) -or -not (Test-Path $After)) { return }
+  $rows = @(Get-StatsDiffRows (Import-DeviceStats $Before) (Import-DeviceStats $After))
+  $tsv = @("metric`tbefore`tafter`tchange")
+  $md = @('# Before / after', '', '| Metric | Before | After | Change |', '|---|---:|---:|---:|')
+  foreach ($r in $rows) {
+    $tsv += "$($r.Label)`t$($r.Before)`t$($r.After)`t$($r.Change)"
+    $md += "| $($r.Label) | $($r.Before) | $($r.After) | $($r.Change) |"
+  }
+  Set-Content -LiteralPath (Join-Path $Directory 'before-after.tsv') -Value $tsv -Encoding ASCII
+  Set-Content -LiteralPath (Join-Path $Directory 'before-after.md') -Value $md -Encoding UTF8
+}
+
 function Show-StatsDiff {
   param([string]$Before, [string]$After)
   if (-not (Test-Path $Before)) { Warn 'no statistics were recorded before this run'; return $false }
@@ -589,41 +862,8 @@ function Show-StatsDiff {
   $b = Import-DeviceStats $Before
   $a = Import-DeviceStats $After
   Say ''
-  Say ('  {0,-34} {1,-12} {2,-12} {3}' -f 'Metric', 'Before', 'After', 'Change')
-
-  foreach ($k in $a.Keys) {
-    if ($k -notmatch '_kb$' -and $k -notmatch '^(packages|disabled)\.user\.') { continue }
-
-    $bv = 0.0; $av = 0.0
-    if ($b.Contains($k)) { [double]::TryParse([string]$b[$k], [ref]$bv) | Out-Null }
-    [double]::TryParse([string]$a[$k], [ref]$av) | Out-Null
-    $d = $av - $bv
-
-    if ($k -match '_kb$') {
-      $bs = Format-Gb $bv
-      $as = Format-Gb $av
-      $sign = if ($d -gt 0) { '+' } else { '' }
-      $cs = '{0}{1:N1} GB' -f $sign, ($d / 1MB)
-    } else {
-      $bs = '{0}' -f [long]$bv
-      $as = '{0}' -f [long]$av
-      $sign = if ($d -gt 0) { '+' } else { '' }
-      $cs = '{0}{1}' -f $sign, [long]$d
-    }
-
-    $label = switch -Regex ($k) {
-      '^mem_total_kb$'         { 'Total RAM'; break }
-      '^mem_available_kb$'     { 'Available RAM'; break }
-      '^mem_free_kb$'          { 'Free RAM'; break }
-      '^storage_total_kb$'     { 'Storage total'; break }
-      '^storage_used_kb$'      { 'Storage used'; break }
-      '^storage_free_kb$'      { 'Storage free'; break }
-      '^packages\.user\.(.+)$' { "Installed packages (user $($Matches[1]))"; break }
-      '^disabled\.user\.(.+)$' { "Disabled packages (user $($Matches[1]))"; break }
-      default                  { $k }
-    }
-    Say ('  {0,-34} {1,-12} {2,-12} {3}' -f $label, $bs, $as, $cs)
-  }
+  Say ('  {0,-40} {1,-12} {2,-12} {3}' -f 'Metric', 'Before', 'After', 'Change')
+  foreach ($r in @(Get-StatsDiffRows $b $a)) { Say ('  {0,-40} {1,-12} {2,-12} {3}' -f $r.Label, $r.Before, $r.After, $r.Change) }
   Dim '  RAM figures move with what is open - package and storage counts are the reliable ones.'
 }
 
@@ -641,6 +881,7 @@ function Show-Compare {
   $statsBefore = Join-Path $dir 'stats-before.tsv'
   $statsAfter = Join-Path $dir 'stats-after.tsv'
   if ((Test-Path $statsBefore) -and (Test-Path $statsAfter)) {
+    Save-BeforeAfterReport $statsBefore $statsAfter $dir
     $null = Show-StatsDiff $statsBefore $statsAfter
     return
   }
@@ -657,18 +898,22 @@ function Show-Compare {
 # ------------------------------------------------------------------ report
 function Show-Report {
   Head1 'Device'
-  Say "  Model      : $(Invoke-Shell 'getprop ro.product.model')"
+  Say "  Name       : $(if ($script:MarketName) {$script:MarketName} else {$script:Model})"
+  Say "  Model      : $($script:Model)"
+  Say "  Maker      : $($script:Manufacturer)"
   Say "  Target     : $($script:DeviceLabel)"
   Say "  Product    : $(Invoke-Shell 'getprop ro.product.name')"
   Say "  Android    : $(Invoke-Shell 'getprop ro.build.version.release') (SDK $(Invoke-Shell 'getprop ro.build.version.sdk'))"
-  Say "  One UI     : $(Format-OneUi (Invoke-Shell 'getprop ro.build.version.oneui'))"
-  Say "  Build      : $(Invoke-Shell 'getprop ro.build.display.id')"
-  Say "  Security   : $(Invoke-Shell 'getprop ro.build.version.security_patch')"
+  Say "  Skin       : $($script:Skin)"
+  Say "  Build      : $($script:Build)"
+  Say "  Security   : $($script:SecurityPatch)"
+  Say "  Profile    : $(if ($script:DeviceProfile) {$script:DeviceProfile} elseif ($script:DeviceClass -eq 'watch') {'watch'} else {'base only'})"
   Say "  CSC        : $(Invoke-Shell 'getprop ro.csc.sales_code')"
 
   Head1 'Display'
   foreach ($l in ((Invoke-Shell 'wm size') -split "`n")) { Say "  $l" }
   foreach ($l in ((Invoke-Shell 'wm density') -split "`n")) { Say "  $l" }
+  Say "  Max mode   : $($script:MaxRefreshRate) Hz"
   Say ("  Animations : " + (Invoke-Shell 'settings get global window_animation_scale') + ' / ' +
        (Invoke-Shell 'settings get global transition_animation_scale') + ' / ' +
        (Invoke-Shell 'settings get global animator_duration_scale'))
@@ -742,7 +987,12 @@ function Show-ProfileList {
 }
 
 function Show-List {
-  Show-ProfileList -Title 'Galaxy tablet / Android profiles' -Directory $Profiles
+  Show-ProfileList -Title 'Android base / Samsung profiles' -Directory $Profiles
+  Get-ChildItem -LiteralPath $Profiles -Filter 'packages-*.tsv' -ErrorAction SilentlyContinue | ForEach-Object {
+    $rows = @(Get-ProfileRows -File $_.FullName -MaxTier 3)
+    Head1 "$($_.BaseName) exact-device additions - $($rows.Count) packages"
+    foreach ($r in $rows) { Say ("  [tier {0}] {1,-52} {2}" -f $r[0], $r[1], $r[3]) }
+  }
   Show-KeepList
   Show-ProfileList -Title 'Galaxy Watch / Wear OS profiles' -Directory (Join-Path $Profiles 'watch')
 }
@@ -830,6 +1080,44 @@ function Show-BeforeAfter {
   Dim '  RAM is an immediate reading; compare again after reboot for a stable result.'
 }
 
+function Wait-ForDeviceBoot {
+  param([int]$TimeoutSeconds = 240)
+  $attempts = [Math]::Max(1, [int]($TimeoutSeconds / 2))
+  for ($i = 0; $i -lt $attempts; $i++) {
+    if ((Invoke-Adb -Arguments @('get-state') -Quiet).Trim() -eq 'device' -and
+        (Invoke-Shell 'getprop sys.boot_completed').Trim() -eq '1') { Start-Sleep -Seconds 5; return $true }
+    Start-Sleep -Seconds 2
+  }
+  return $false
+}
+
+function Test-PostApplyHealth {
+  param([int[]]$Users, [string]$Path)
+  $present = @{}
+  foreach ($u in $Users) {
+    foreach ($line in ((Invoke-Shell "pm list packages --user $u") -split "`n")) {
+      if ($line -match '^package:(.+)$') { $present[$Matches[1].Trim()] = $true }
+    }
+  }
+  $checks = @("check`tresult`tdetail"); $healthy = $true
+  foreach ($p in $script:RuntimeProtected.Keys) {
+    $ok = $present.ContainsKey($p)
+    $checks += "protected:$p`t$(if ($ok) {'ok'} else {'FAIL'})`t$($script:RuntimeProtectionReason[$p])"
+    if (-not $ok) { Fail "post-run safety check: protected package missing: $p"; $healthy = $false }
+  }
+  if ($script:DeviceClass -ne 'watch') {
+    foreach ($u in $Users) {
+      $homeHolder = (Invoke-Shell "cmd role get-role-holders --user $u android.app.role.HOME").Trim()
+      $ok = [bool]($homeHolder -match '^[A-Za-z][A-Za-z0-9_.]+$')
+      $checks += "home:user:$u`t$(if ($ok) {'ok'} else {'FAIL'})`t$homeHolder"
+      if (-not $ok) { Fail "post-run safety check: user $u has no default launcher"; $healthy = $false }
+    }
+  }
+  Set-Content -LiteralPath $Path -Value $checks -Encoding ASCII
+  if ($healthy) { Ok 'post-run safety checks passed' }
+  return $healthy
+}
+
 # ------------------------------------------------------------------ apply
 function Invoke-Apply {
   $tier = Get-Tier $script:Profile
@@ -838,11 +1126,13 @@ function Invoke-Apply {
   Get-Device
   $users = @(Resolve-Users)
   if ($users.Count -eq 0) { Die 'could not determine any user profile' }
+  Initialize-RuntimeProtection -Users $users
 
-  $pkgCount = (Get-ProfileRows -File $script:PackagesFile -MaxTier $tier).Count
+  $pkgCount = @(Get-PackageRows -MaxTier $tier).Count
   Head1 'Plan'
   Say "  Target     : $($script:DeviceLabel)"
   Say "  Profile    : $($script:Profile) (tier <= $tier)"
+  if ($script:DeviceProfile) { Say "  Device     : $($script:DeviceProfile)" }
   Say "  Packages   : $pkgCount"
   $settingCount = @(Get-SettingRows -MaxTier $tier).Count
   if ($script:ApplySettings) {
@@ -858,11 +1148,14 @@ function Invoke-Apply {
     } else {
       Say '  Keep       : none - every package in the profile can be removed'
     }
+    Say "  Active     : $($script:RuntimeProtected.Count) installed defaults/services protected automatically"
   }
   if ($script:Extras) { Warn 'extras enabled - device-critical optional services will be changed' }
   if ($script:DisablePreloads) { Say '  Preloads   : disabled (kept on disk) instead of deleted' }
+  else { Warn 'data-installed target apps, if any, will be deleted with their app data (use -DisablePreloads to prevent this)' }
   if ($script:Trim) { Say '  Cache      : trim after package changes' }
-  if ($script:Reboot) { Say '  Reboot     : yes, after statistics are captured' }
+  if ($script:Reboot -and $script:DeviceClass -ne 'watch') { Say '  Reboot     : yes; final after snapshot will be captured post-reboot' }
+  elseif ($script:Reboot) { Say '  Reboot     : yes, after immediate statistics are captured' }
   if ($script:DryRun) { Warn 'dry run - nothing will change' }
 
   if (-not $script:DryRun -and -not $script:AssumeYes) {
@@ -882,7 +1175,7 @@ function Invoke-Apply {
   Save-Snapshot -Path $beforeFile -Users $users
   if ($script:DryRun) { Show-Snapshot -Heading 'Current baseline' -Path $beforeFile }
 
-  $rows = @(Get-ProfileRows -File $script:PackagesFile -MaxTier $tier)
+  $rows = @(Get-PackageRows -MaxTier $tier)
   if ($script:Extras) { $rows += @(Get-ProfileRows -File $script:ExtrasFile -MaxTier 9) }
 
   $keep = @{}
@@ -894,6 +1187,11 @@ function Invoke-Apply {
     $null = Get-PackageCache -User $u
     Info 'Applying package profile'
     foreach ($r in $rows) {
+      if (-not (Test-Installed -User $u -Package $r[1])) { continue }
+      if (Test-Protected $r[1]) {
+        Write-Host ("    # {0,-48} {1} ({2})" -f $r[1], $r[2], (Get-ProtectionReason $r[1])) -ForegroundColor DarkGray
+        continue
+      }
       if ($keep.ContainsKey($r[1])) {
         Write-Host ("    = {0,-48} {1} (kept)" -f $r[1], $r[2]) -ForegroundColor DarkGray
         continue
@@ -926,27 +1224,46 @@ function Invoke-Apply {
     Ok 'dexopt job finished'
   }
 
-  if (-not $script:DryRun) {
-    Save-DeviceStats (Get-DeviceStats) (Join-Path $script:LastBackup 'stats-after.tsv')
-    Ok 'statistics captured (after)'
-  }
-
   if ($script:DryRun) {
     Head1 'Done'
     Say '  Dry run complete - nothing was changed.'
   } else {
+    $afterStats = Join-Path $script:LastBackup 'stats-after.tsv'
     $afterFile = Join-Path $script:LastBackup 'after.txt'
-    Save-Snapshot -Path $afterFile -Users $users
-    Show-BeforeAfter -BeforePath $beforeFile -AfterPath $afterFile
+    if ($script:Reboot -and $script:DeviceClass -ne 'watch') {
+      Save-DeviceStats (Get-DeviceStats) (Join-Path $script:LastBackup 'stats-after-pre-reboot.tsv')
+      Save-Snapshot -Path (Join-Path $script:LastBackup 'after-pre-reboot.txt') -Users $users
+      Ok 'immediate post-change statistics captured'
+      Info 'Rebooting device before the final after snapshot'
+      $null = Invoke-Adb -Arguments @('reboot') -Quiet
+      if (Wait-ForDeviceBoot) {
+        Ok 'device boot completed'
+        Save-DeviceStats (Get-DeviceStats) $afterStats
+        Save-Snapshot -Path $afterFile -Users $users
+        Ok 'statistics captured (after reboot)'
+      } else { Warn 'device did not finish booting before the timeout; final after snapshot was not created' }
+    } else {
+      Save-DeviceStats (Get-DeviceStats) $afterStats
+      Save-Snapshot -Path $afterFile -Users $users
+      Ok 'statistics captured (after)'
+    }
+    if (Test-Path $afterStats) {
+      $null = Test-PostApplyHealth -Users $users -Path (Join-Path $script:LastBackup 'safety-checks.tsv')
+      Save-BeforeAfterReport (Join-Path $script:LastBackup 'stats-before.tsv') $afterStats $script:LastBackup
+      Head1 'Before / after'
+      $null = Show-StatsDiff (Join-Path $script:LastBackup 'stats-before.tsv') $afterStats
+    }
+    if (Test-Path $afterFile) { Show-BeforeAfter -BeforePath $beforeFile -AfterPath $afterFile }
     Head1 'Done'
     Say "  $total package actions applied."
     Say "  Backup: $($script:LastBackup)"
+    if (Test-Path (Join-Path $script:LastBackup 'before-after.md')) { Say "  Report: $(Join-Path $script:LastBackup 'before-after.md')" }
     Say '  Undo  : .\run.ps1 -Restore'
-    Dim '  A reboot is recommended so every change takes effect.'
+    if (-not $script:Reboot) { Dim '  A reboot is recommended so every change takes effect.' }
     if ($script:DeviceClass -eq 'watch') { Dim '  Turn off ADB debugging and wireless debugging on the watch when finished.' }
   }
 
-  if ($script:Reboot -and -not $script:DryRun) {
+  if ($script:Reboot -and -not $script:DryRun -and $script:DeviceClass -eq 'watch') {
     Info 'Rebooting device'
     $null = Invoke-Adb -Arguments @('reboot') -Quiet
   }
@@ -1060,7 +1377,7 @@ function Invoke-RestoreAll {
     if ($answer -notmatch '^[yY]') { Say '  cancelled.'; return }
   }
 
-  $rows = @(Get-ProfileRows -File $script:PackagesFile -MaxTier 9)
+  $rows = @(Get-PackageRows -MaxTier 9)
   $rows += @(Get-ProfileRows -File $script:ExtrasFile -MaxTier 9)
   $n = 0
 
@@ -1093,7 +1410,7 @@ function Invoke-RestoreAll {
     $null = Invoke-Shell 'settings put global animator_duration_scale 1.0'
     $null = Invoke-Shell 'settings delete global cached_apps_freezer'
     if ($script:DeviceClass -ne 'watch') {
-      $null = Invoke-Shell 'settings put global sem_enhanced_cpu_responsiveness 0'
+      if ($script:Manufacturer -ieq 'Samsung') { $null = Invoke-Shell 'settings put global sem_enhanced_cpu_responsiveness 0' }
       $null = Invoke-Shell 'settings put global wifi_scan_always_enabled 1'
       $null = Invoke-Shell 'settings put global ble_scan_always_enabled 1'
       $null = Invoke-Shell 'settings delete system min_refresh_rate'
@@ -1146,7 +1463,7 @@ for ($i = 0; $i -lt $argsList.Count; $i++) {
     '^-List$'                       { $script:Mode = 'list' }
     '^-Report$'                     { $script:Mode = 'report' }
     '^-Help$|^-h$|^-\?$'            { Show-Usage; exit 0 }
-    '^-Version$'                    { Say "universal-samsung-optimiser $Version"; exit 0 }
+    '^-Version$'                    { Say "universal-android-optimiser $Version"; exit 0 }
     default                         { Fail "unknown argument: $a"; Say ''; Show-Usage; exit 2 }
   }
 }
@@ -1167,7 +1484,7 @@ switch ($script:Mode) {
 # ------------------------------------------------------------------ interactive menu
 if (-not $script:Profile) {
   Get-Device
-  Head1 "Universal Samsung Optimiser v$Version"
+  Head1 "Universal Android Optimiser v$Version"
   Say "  Device: $($script:Model) - Android $($script:Release) ($($script:DeviceLabel))"
   Say ''
   if ($script:DeviceClass -eq 'watch') {
@@ -1175,9 +1492,9 @@ if (-not $script:Profile) {
     Say '  2) balanced    - + Bixby, customisation and enterprise provisioning'
     Say '  3) aggressive  - + optional apps; calls, Google Messages and health stay'
   } else {
-    Say '  1) light       - telemetry, diagnostics, AR toys, preloads'
-    Say '  2) balanced    - + Bixby, Samsung extras, gaming services, TTS packs'
-    Say '  3) aggressive  - + browsers, YouTube, Samsung account apps (Teams/Gmail/Office/phone kept)'
+    Say '  1) light       - telemetry, diagnostics, ads and factory tools'
+    Say '  2) balanced    - + optional OEM/Google services and gaming extras'
+    Say '  3) aggressive  - + replaceable browser, media and productivity apps'
   }
   Say '  4) restore     - undo the last run'
   Say '  5) report      - show device info without changing anything'

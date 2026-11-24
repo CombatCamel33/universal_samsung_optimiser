@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-#  Universal Samsung Optimiser - macOS / Linux driver
+#  Universal Android Optimiser - macOS / Linux driver
 #  ---------------------------------------------------------------
-#  Debloats and tunes supported Samsung Galaxy tablets and watches
-#  over ADB. Every change is reversible.
+#  Debloats and tunes exactly matched Android phones, tablets and watches
+#  over ADB. Every change is recorded and reversible.
 #
 #  Usage:  ./run.sh [light|balanced|aggressive] [options]
 #  Help:   ./run.sh --help
@@ -12,7 +12,7 @@
 #
 set -u
 
-VERSION="1.3.1"
+VERSION="1.4.0"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILES="$ROOT/profiles"
 BACKUP_ROOT="$ROOT/backups"
@@ -63,6 +63,15 @@ DEVICE_LABEL="Galaxy tablet / Android"
 CHARACTERISTICS=""
 HARDWARE_ID=""
 WATCH_FEATURE="false"
+MANUFACTURER=""
+MARKET_NAME=""
+BUILD=""
+SECURITY_PATCH=""
+SKIN=""
+DEVICE_PROFILE=""
+DEVICE_PROFILE_NAME=""
+DEVICE_PACKAGE_FILE=""
+MAX_REFRESH_RATE=""
 
 # App groups that are never removed. Works on tablets and phones alike.
 KEEP_DEFAULT="teams,samsung-internet,office,gmail,messages,phoning"
@@ -71,7 +80,7 @@ KEEP_EXPLICIT=0
 
 usage() {
   cat <<EOF
-${C_BOLD}Universal Samsung Optimiser${C_RESET} v$VERSION
+${C_BOLD}Universal Android Optimiser${C_RESET} v$VERSION
 
   ./run.sh <profile> [options]      apply a profile
   ./run.sh --restore [dir]          undo every change (or restore one backup dir)
@@ -79,12 +88,12 @@ ${C_BOLD}Universal Samsung Optimiser${C_RESET} v$VERSION
   ./run.sh --compare [dir]          show the before/after statistics of a run
 
 ${C_BOLD}Profiles${C_RESET}
-  light         safest telemetry, diagnostics and factory leftovers
-  balanced      + optional Samsung/Google background features
-  aggressive    + replaceable user-facing apps (Teams/Gmail/Office/phone kept)
+  light         telemetry, diagnostics, ads and factory leftovers
+  balanced      + optional OEM/Google background features
+  aggressive    + replaceable user-facing apps (defaults/phone kept)
 
-  A Galaxy Watch is detected automatically and uses its own conservative,
-  device-tested package list. Run --list to see both device families.
+  Galaxy Watch and exact Redmi 10 profiles are detected automatically.
+  Run --list to see base, exact-device and watch profiles.
 
 ${C_BOLD}Options${C_RESET}
   --profile <name>   same as passing the profile as the first argument
@@ -97,7 +106,7 @@ ${C_BOLD}Options${C_RESET}
   --keep <groups>    keep these app groups installed (default: all of them)
                      groups: teams, samsung-internet, office, gmail, messages, phoning
                      repeatable, or comma-separated; "none" disables keeping
-  --no-keep          original aggressive behaviour - remove every listed package
+  --no-keep          disable named keep groups; hard/default-app safety still wins
   --list-keep        print the keep groups and their packages
   --trim             clear app caches (pm trim-caches)
   --dexopt           run a background dexopt job now (slow, optimises app start-up)
@@ -149,6 +158,10 @@ oneui_version() { # 80500 -> 8.5, 60100 -> 6.1, 70000 -> 7.0
   fi
 }
 
+miui_version() {
+  case "$1" in V[0-9][0-9][0-9]) printf '%s.%s' "$(printf '%s' "$1" | cut -c2-3)" "$(printf '%s' "$1" | cut -c4)" ;; *) printf '%s' "$1" ;; esac
+}
+
 adbs() { # adbs <shell args...>  -> runs adb shell, strips CR
   if [ -n "$SERIAL" ]; then
     "$ADB" -s "$SERIAL" shell "$@" </dev/null 2>/dev/null | tr -d '\r'
@@ -161,12 +174,39 @@ adb_raw() {
   if [ -n "$SERIAL" ]; then "$ADB" -s "$SERIAL" "$@" </dev/null; else "$ADB" "$@" </dev/null; fi
 }
 
+resolve_exact_device_profile() {
+  local file="$PROFILES/devices.tsv" id maker device model name pkg
+  DEVICE_PROFILE=""; DEVICE_PROFILE_NAME=""; DEVICE_PACKAGE_FILE=""
+  [ "$DEVICE_CLASS" = "watch" ] && return 0
+  [ -f "$file" ] || return 0
+  while IFS='	' read -r id maker device model name pkg; do
+    case "$id" in ''|'#'*) continue ;; esac
+    if [ "$(printf '%s' "$maker" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$MANUFACTURER" | tr '[:upper:]' '[:lower:]')" ] &&
+       [ "$(printf '%s' "$device" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$DEVICE" | tr '[:upper:]' '[:lower:]')" ] &&
+       [ "$(printf '%s' "$model" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$MODEL" | tr '[:upper:]' '[:lower:]')" ]; then
+      DEVICE_PROFILE="$id"; DEVICE_PROFILE_NAME="$name"
+      [ -n "$pkg" ] && [ "$pkg" != "-" ] && DEVICE_PACKAGE_FILE="$PROFILES/$pkg"
+      return 0
+    fi
+  done < "$file"
+}
+
+detect_max_refresh_rate() {
+  local max fallback
+  max="$(adbs "dumpsys display" | grep -Eo '(fps|refreshRate)=[0-9]+([.][0-9]+)?' | cut -d= -f2 |
+    awk '$1 >= 30 && $1 <= 240 && $1 > max {max=$1} END {if(max>0) printf "%g",max}')"
+  if [ -z "$max" ]; then fallback="$(adbs "settings get system peak_refresh_rate")"; case "$fallback" in ''|null|*[!0-9.]*) ;; *) max="$fallback" ;; esac; fi
+  printf '%s' "$max"
+}
+
 configure_device_profile() {
   local safe_id
   DEVICE_CLASS="tablet"
-  DEVICE_LABEL="Galaxy tablet / Android"
+  DEVICE_LABEL="Android phone / tablet"
   PROFILE_DIR="$PROFILES"
-  BACKUPS="$BACKUP_ROOT"
+  safe_id="$(printf '%s' "$SERIAL" | tr -c 'A-Za-z0-9._-' '_')"
+  [ -z "$safe_id" ] && safe_id="unknown-android"
+  BACKUPS="$BACKUP_ROOT/device-$safe_id"
 
   case ",$CHARACTERISTICS,$WATCH_FEATURE," in
     *,watch,*|*,true,*)
@@ -182,6 +222,7 @@ configure_device_profile() {
   PACKAGES_FILE="$PROFILE_DIR/packages.tsv"
   SETTINGS_FILE="$PROFILE_DIR/settings.tsv"
   EXTRAS_FILE="$PROFILE_DIR/extras.tsv"
+  resolve_exact_device_profile
 }
 
 require_device() {
@@ -190,9 +231,9 @@ require_device() {
   out="$(adb_raw devices | tr -d '\r' | awk 'NR>1 && $2=="device" {print $1}')"
   if [ -z "$out" ]; then
     fail "No authorised device found."
-    say  "  1. Enable Developer options (Settings > About tablet > Software information > tap Build number 7x)"
+    say  "  1. Enable Developer options (Settings > About phone/tablet > Software information > tap Build number 7x)"
     say  "  2. Turn on USB debugging"
-    say  "  3. Reconnect the cable and accept the RSA prompt on the tablet"
+    say  "  3. Reconnect and accept the RSA prompt on the device"
     exit 1
   fi
   if [ -z "$SERIAL" ]; then
@@ -204,14 +245,24 @@ require_device() {
   adb_raw wait-for-device >/dev/null 2>&1
   MODEL="$(adbs getprop ro.product.model)"
   DEVICE="$(adbs getprop ro.product.device)"
+  MANUFACTURER="$(adbs getprop ro.product.manufacturer)"
+  MARKET_NAME="$(adbs getprop ro.product.marketname)"
   RELEASE="$(adbs getprop ro.build.version.release)"
+  BUILD="$(adbs getprop ro.build.version.incremental)"
+  SECURITY_PATCH="$(adbs getprop ro.build.version.security_patch)"
   CHARACTERISTICS="$(adbs getprop ro.build.characteristics)"
   HARDWARE_ID="$(adbs getprop ro.serialno)"
   WATCH_FEATURE="$(adbs "pm has-feature android.hardware.type.watch")"
   configure_device_profile
   ONUI="$(oneui_version "$(adbs getprop ro.build.version.oneui)")"
-  [ -n "$ONUI" ] && ONUI=" / One UI $ONUI"
-  info "Device: ${C_BOLD}${MODEL}${C_RESET} (${DEVICE}) - Android ${RELEASE}${ONUI} [$DEVICE_LABEL]"
+  MIUI="$(miui_version "$(adbs getprop ro.miui.ui.version.name)")"
+  if [ -n "$ONUI" ]; then SKIN="One UI $ONUI"; elif [ -n "$MIUI" ]; then SKIN="MIUI $MIUI"; else SKIN=""; fi
+  MAX_REFRESH_RATE="$(detect_max_refresh_rate)"
+  local name skin_suffix hz_suffix
+  name="${MARKET_NAME:-${DEVICE_PROFILE_NAME:-$MODEL}}"; skin_suffix=""; hz_suffix=""
+  [ -n "$SKIN" ] && skin_suffix=" / $SKIN"; [ -n "$MAX_REFRESH_RATE" ] && hz_suffix=" / max $MAX_REFRESH_RATE Hz"
+  info "Device: ${C_BOLD}${name}${C_RESET} [$MODEL] ($DEVICE) - Android ${RELEASE}${skin_suffix}${hz_suffix} [$DEVICE_LABEL]"
+  [ -n "$DEVICE_PROFILE" ] && ok "matched device profile: $DEVICE_PROFILE"
 }
 
 # ------------------------------------------------------------------ users
@@ -316,8 +367,66 @@ count_rows() { # count_rows <file> <max>
   ts_filter "$1" "$2" | wc -l | tr -d ' '
 }
 
+package_rows() {
+  ts_filter "$PACKAGES_FILE" "$1"
+  if [ -n "$DEVICE_PACKAGE_FILE" ] && [ -f "$DEVICE_PACKAGE_FILE" ]; then ts_filter "$DEVICE_PACKAGE_FILE" "$1"; fi
+}
+
+count_package_rows() { package_rows "$1" | wc -l | tr -d ' '; }
+
+setting_rows() {
+  local max="$1" tier ns key val note scope scope_l maker_l resolved
+  maker_l="$(printf '%s' "$MANUFACTURER" | tr '[:upper:]' '[:lower:]')"
+  while IFS='	' read -r tier ns key val note scope; do
+    case "$tier" in ''|'#'*) continue ;; esac
+    [ "$tier" -le "$max" ] 2>/dev/null || continue
+    scope="${scope:-all}"; scope_l="$(printf '%s' "$scope" | tr '[:upper:]' '[:lower:]')"
+    if [ -n "$MANUFACTURER" ] && [ "$scope_l" != "all" ] && [ "$scope_l" != "$maker_l" ] && [ "$scope_l" != "$DEVICE_PROFILE" ]; then continue; fi
+    resolved="$val"
+    case "$val" in
+      __MAX_REFRESH__) [ -n "$MAX_REFRESH_RATE" ] || continue; resolved="$MAX_REFRESH_RATE" ;;
+      __BALANCED_MIN_REFRESH__) [ -n "$MAX_REFRESH_RATE" ] || continue; resolved="$(awk -v max="$MAX_REFRESH_RATE" 'BEGIN{if(max<60)printf "%g",max;else print 60}')" ;;
+    esac
+    printf '%s\t%s\t%s\t%s\t%s\n' "$tier" "$ns" "$key" "$resolved" "$note"
+  done < "$SETTINGS_FILE"
+}
+
+# ------------------------------------------------------------------ active/default app protection
+add_runtime_protected() {
+  local pkg reason="$2"; pkg="${1%%/*}"
+  case "$pkg" in [A-Za-z]*.*) printf '%s\t%s\n' "$pkg" "$reason" >> "$TMP/runtime-protected.tsv" ;; esac
+}
+
+build_runtime_protection() {
+  local users="$1" u role reason line value component
+  : > "$TMP/runtime-protected.tsv"
+  [ "$DEVICE_CLASS" = "watch" ] && return 0
+  for u in $users; do
+    for role in android.app.role.HOME android.app.role.SMS android.app.role.DIALER android.app.role.BROWSER; do
+      case "$role" in *.HOME) reason="active launcher";; *.SMS) reason="default SMS app";; *.DIALER) reason="default dialer";; *) reason="default browser";; esac
+      adbs "cmd role get-role-holders --user $u $role" | while IFS= read -r line; do add_runtime_protected "$line" "$reason"; done
+    done
+    value="$(adbs "settings --user $u get secure default_input_method")"; [ -n "$value" ] && [ "$value" != "null" ] && add_runtime_protected "$value" "active keyboard"
+    for line in enabled_accessibility_services enabled_notification_listeners; do
+      value="$(adbs "settings --user $u get secure $line")"; [ -n "$value" ] && [ "$value" != "null" ] || continue
+      reason="enabled notification listener"; [ "$line" = "enabled_accessibility_services" ] && reason="enabled accessibility service"
+      printf '%s\n' "$value" | tr ':' '\n' | while IFS= read -r component; do add_runtime_protected "$component" "$reason"; done
+    done
+  done
+  sort -u "$TMP/runtime-protected.tsv" -o "$TMP/runtime-protected.tsv"
+  : > "$TMP/runtime-installed.txt"
+  for u in $users; do adbs "pm list packages --user $u" | sed -n 's/^package://p' >> "$TMP/runtime-installed.txt"; done
+  sort -u "$TMP/runtime-installed.txt" -o "$TMP/runtime-installed.txt"
+  awk -F'\t' 'NR==FNR{present[$1]=1;next}present[$1]' "$TMP/runtime-installed.txt" "$TMP/runtime-protected.tsv" > "$TMP/runtime-protected.filtered.tsv"
+  mv "$TMP/runtime-protected.filtered.tsv" "$TMP/runtime-protected.tsv"
+}
+
+runtime_protected() { awk -F'\t' -v p="$1" '$1==p{found=1}END{exit !found}' "$TMP/runtime-protected.tsv" 2>/dev/null; }
+protection_reason() { awk -F'\t' -v p="$1" '$1==p{print $2;exit}' "$TMP/runtime-protected.tsv" 2>/dev/null; }
+
 # ------------------------------------------------------------------ safety net
 is_protected() {
+  runtime_protected "$1" && return 0
   case "$1" in
     android|com.android.systemui|com.android.settings|com.android.shell|\
     com.android.phone|com.android.server.telecom|com.android.providers.settings|\
@@ -333,7 +442,16 @@ is_protected() {
     com.sec.android.app.launcher|com.samsung.android.honeyboard|\
     com.samsung.android.biometrics.app.setting|com.samsung.android.location|\
     com.android.externalstorage|com.android.intentresolver|\
-    com.android.vpndialogs|com.android.mtp|com.samsung.android.mtp)
+    com.android.vpndialogs|com.android.mtp|com.samsung.android.mtp|\
+    com.google.android.inputmethod.latin|com.google.android.dialer|com.android.updater|\
+    com.lbe.security.miui|com.miui.home|com.miui.system|com.miui.core|com.miui.rom|\
+    com.miui.securitycenter|com.miui.securitycore|com.miui.securityadd|com.miui.powerkeeper|\
+    com.miui.global.packageinstaller|com.miui.notification|com.miui.miwallpaper|\
+    com.xiaomi.misettings|com.xiaomi.discover|com.xiaomi.finddevice|com.xiaomi.micloud.sdk|\
+    com.xiaomi.account|com.xiaomi.xmsf|com.xiaomi.xmsfkeeper|com.xiaomi.joyose|\
+    com.miui.systemui.carriers.overlay|android.miui.home.launcher.res|\
+    com.android.phone.overlay.miui|com.android.server.telecom.overlay.miui|\
+    com.android.carrierconfig.overlay.miui)
       return 0 ;;
   esac
   if [ "$DEVICE_CLASS" = "watch" ]; then
@@ -453,7 +571,7 @@ apply_pkg() { # apply_pkg <user> <package> <category> [auto|uninstall|disable]
 
 # ------------------------------------------------------------------ settings
 apply_setting() { # apply_setting <ns> <key> <value> <note>
-  local ns="$1" key="$2" val="$3" note="$4" old
+  local ns="$1" key="$2" val="$3" note="$4" old readback applied=0
   old="$(adbs "settings get $ns $key")"
   [ -z "$old" ] && old="null"
 
@@ -470,7 +588,13 @@ apply_setting() { # apply_setting <ns> <key> <value> <note>
   else
     adbs "settings put $ns $key $val" >/dev/null
   fi
-  ok "$ns/$key = $val  ${C_DIM}(was $old)${C_RESET}"
+  readback="$(adbs "settings get $ns $key")"
+  if [ "$val" = "__DELETE__" ]; then
+    if [ -z "$readback" ] || [ "$readback" = "null" ]; then applied=1; fi
+  elif [ "$readback" = "$val" ]; then applied=1
+  elif awk -v want="$val" -v got="$readback" 'BEGIN{if(want!~/^[-+]?[0-9]+([.][0-9]+)?$/||got!~/^[-+]?[0-9]+([.][0-9]+)?$/)exit 1;d=want-got;if(d<0)d=-d;exit !(d<0.001)}'; then applied=1
+  fi
+  if [ "$applied" -eq 1 ]; then ok "$ns/$key = $val  ${C_DIM}(was $old)${C_RESET}"; else warn "$ns/$key was not applied (readback: $readback)"; fi
 }
 
 restore_setting() { # restore_setting <ns> <key> <old>
@@ -486,11 +610,26 @@ restore_setting() { # restore_setting <ns> <key> <old>
 
 # ------------------------------------------------------------------ statistics
 snapshot_stats() { # snapshot_stats <path>  -> key/value TSV for before/after comparisons
-  local out="$1" u line total used free
+  local out="$1" u line total used free installed tier target_count protected_count
+  tier="$(profile_tier "$PROFILE" 2>/dev/null || printf '0')"
+  : > "$TMP/stats-targets.txt"
+  if [ "$tier" -gt 0 ] 2>/dev/null; then package_rows "$tier" | cut -f2 >> "$TMP/stats-targets.txt"; fi
+  if [ "$WANT_EXTRAS" -eq 1 ]; then ts_filter "$EXTRAS_FILE" 9 | cut -f2 >> "$TMP/stats-targets.txt"; fi
+  { keep_packages; cut -f1 "$TMP/runtime-protected.tsv" 2>/dev/null; } | sort -u > "$TMP/stats-protected.txt"
   {
     printf 'key\tvalue\n'
+    printf 'manufacturer\t%s\n' "${MANUFACTURER:-unknown}"
     printf 'model\t%s\n' "${MODEL:-unknown}"
+    printf 'device\t%s\n' "${DEVICE:-unknown}"
     printf 'android\t%s\n' "${RELEASE:-unknown}"
+    printf 'build\t%s\n' "${BUILD:-unknown}"
+    printf 'security_patch\t%s\n' "${SECURITY_PATCH:-unknown}"
+    printf 'display.max_refresh_hz\t%s\n' "${MAX_REFRESH_RATE:-unknown}"
+    printf 'setting.window_animation_scale\t%s\n' "$(adbs "settings get global window_animation_scale")"
+    printf 'setting.transition_animation_scale\t%s\n' "$(adbs "settings get global transition_animation_scale")"
+    printf 'setting.animator_duration_scale\t%s\n' "$(adbs "settings get global animator_duration_scale")"
+    printf 'setting.peak_refresh_rate\t%s\n' "$(adbs "settings get system peak_refresh_rate")"
+    printf 'setting.min_refresh_rate\t%s\n' "$(adbs "settings get system min_refresh_rate")"
     printf 'mem_total_kb\t%s\n' "$(adbs "cat /proc/meminfo" | awk '/^MemTotal:/{print $2; exit}')"
     printf 'mem_free_kb\t%s\n' "$(adbs "cat /proc/meminfo" | awk '/^MemFree:/{print $2; exit}')"
     printf 'mem_available_kb\t%s\n' "$(adbs "cat /proc/meminfo" | awk '/^MemAvailable:/{print $2; exit}')"
@@ -502,8 +641,13 @@ snapshot_stats() { # snapshot_stats <path>  -> key/value TSV for before/after co
     printf 'storage_used_kb\t%s\n' "${used:-0}"
     printf 'storage_free_kb\t%s\n' "${free:-0}"
     for u in $(resolve_users); do
-      printf 'packages.user.%s\t%s\n' "$u" "$(adbs "pm list packages --user $u" | grep -c '^package:')"
+      installed="$(adbs "pm list packages --user $u" | grep '^package:')"
+      printf 'packages.user.%s\t%s\n' "$u" "$(printf '%s\n' "$installed" | grep -c '^package:')"
       printf 'disabled.user.%s\t%s\n' "$u" "$(adbs "pm list packages -d --user $u" | grep -c '^package:')"
+      target_count="$(printf '%s\n' "$installed" | sed 's/^package://' | grep -Fxf "$TMP/stats-targets.txt" 2>/dev/null | wc -l | tr -d ' ')"
+      protected_count="$(printf '%s\n' "$installed" | sed 's/^package://' | grep -Fxf "$TMP/stats-protected.txt" 2>/dev/null | wc -l | tr -d ' ')"
+      printf 'targeted.user.%s\t%s\n' "$u" "${target_count:-0}"
+      printf 'protected.user.%s\t%s\n' "$u" "${protected_count:-0}"
     done
   } > "$out"
 }
@@ -519,11 +663,13 @@ show_stats_diff() { # show_stats_diff <before.tsv> <after.tsv>
     return 1
   fi
 
-  printf '  %-34s %-12s %-12s %s\n' 'Metric' 'Before' 'After' 'Change'
+  printf '  %-40s %-12s %-12s %s\n' 'Metric' 'Before' 'After' 'Change'
   awk -F'\t' '
     function gb(kb) { return sprintf("%.1f GB", kb / 1048576) }
     function is_kb(k) { return k ~ /_kb$/ }
-    function interesting(k) { return k ~ /_kb$/ || k ~ /^(packages|disabled)\.user\./ }
+    function is_count(k) { return k ~ /^(packages|disabled|targeted|protected)\.user\./ }
+    function is_num(v) { return v ~ /^[-+]?[0-9]+([.][0-9]+)?$/ }
+    function interesting(k) { return is_kb(k) || is_count(k) || k ~ /^setting\./ || k == "display.max_refresh_hz" }
     FNR == 1 { next }
     FNR == NR { b[$1] = $2; next }
     {
@@ -533,16 +679,18 @@ show_stats_diff() { # show_stats_diff <before.tsv> <after.tsv>
     END {
       for (i = 1; i <= n; i++) {
         key = order[i]
-        av = a[key] + 0
-        bv = (key in b) ? b[key] + 0 : 0
-        d = av - bv
-        if (is_kb(key)) {
-          if (d > -52429 && d < 52429) d = 0
+        ar = a[key]; br = (key in b) ? b[key] : "n/a"
+        av = ar + 0; bv = br + 0; d = av - bv
+        if (is_kb(key) && is_num(ar) && is_num(br)) {
           bs = gb(bv); as = gb(av)
           cs = (d > 0 ? "+" : "") sprintf("%.1f GB", d / 1048576)
-        } else {
+        } else if (is_count(key) && is_num(ar) && is_num(br)) {
           bs = bv ""; as = av ""
           cs = (d > 0 ? "+" : "") d ""
+        } else {
+          bs = br; as = ar
+          if (is_num(ar) && is_num(br)) cs = (d == 0 ? "unchanged" : (d > 0 ? "+" : "") sprintf("%.2f", d))
+          else cs = (ar == br ? "unchanged" : "changed")
         }
         label = key
         if (key == "mem_total_kb") label = "Total RAM"
@@ -557,12 +705,69 @@ show_stats_diff() { # show_stats_diff <before.tsv> <after.tsv>
         } else if (key ~ /^disabled\.user\./) {
           id = key; sub(/^disabled\.user\./, "", id)
           label = "Disabled packages (user " id ")"
-        }
-        printf "  %-34s %-12s %-12s %s\n", label, bs, as, cs
+        } else if (key ~ /^targeted\.user\./) {
+          id = key; sub(/^targeted\.user\./, "", id)
+          label = "Profile packages present (user " id ")"
+        } else if (key ~ /^protected\.user\./) {
+          id = key; sub(/^protected\.user\./, "", id)
+          label = "Protected packages present (user " id ")"
+        } else if (key == "display.max_refresh_hz") label = "Display maximum"
+        else if (key == "setting.window_animation_scale") label = "Window animation scale"
+        else if (key == "setting.transition_animation_scale") label = "Transition animation scale"
+        else if (key == "setting.animator_duration_scale") label = "Animator duration scale"
+        else if (key == "setting.peak_refresh_rate") label = "Peak refresh-rate setting"
+        else if (key == "setting.min_refresh_rate") label = "Minimum refresh-rate setting"
+        printf "  %-40s %-12s %-12s %s\n", label, bs, as, cs
       }
     }
   ' "$before" "$after"
   dim "  RAM figures move with what is open - package and storage counts are the reliable ones."
+}
+
+save_before_after_report() { # before after directory
+  local before="$1" after="$2" dir="$3"
+  [ -f "$before" ] && [ -f "$after" ] || return 0
+  awk -F'\t' '
+    function gb(kb) { return sprintf("%.1f GB", kb / 1048576) }
+    function is_kb(k) { return k ~ /_kb$/ }
+    function is_count(k) { return k ~ /^(packages|disabled|targeted|protected)\.user\./ }
+    function is_num(v) { return v ~ /^[-+]?[0-9]+([.][0-9]+)?$/ }
+    function interesting(k) { return is_kb(k) || is_count(k) || k ~ /^setting\./ || k == "display.max_refresh_hz" }
+    function label_for(key, id) {
+      if (key == "mem_total_kb") return "Total RAM"
+      if (key == "mem_available_kb") return "Available RAM"
+      if (key == "mem_free_kb") return "Free RAM"
+      if (key == "storage_total_kb") return "Storage total"
+      if (key == "storage_used_kb") return "Storage used"
+      if (key == "storage_free_kb") return "Storage free"
+      if (key ~ /^packages\.user\./) { id=key; sub(/^packages\.user\./,"",id); return "Installed packages (user " id ")" }
+      if (key ~ /^disabled\.user\./) { id=key; sub(/^disabled\.user\./,"",id); return "Disabled packages (user " id ")" }
+      if (key ~ /^targeted\.user\./) { id=key; sub(/^targeted\.user\./,"",id); return "Profile packages present (user " id ")" }
+      if (key ~ /^protected\.user\./) { id=key; sub(/^protected\.user\./,"",id); return "Protected packages present (user " id ")" }
+      if (key == "display.max_refresh_hz") return "Display maximum"
+      if (key == "setting.window_animation_scale") return "Window animation scale"
+      if (key == "setting.transition_animation_scale") return "Transition animation scale"
+      if (key == "setting.animator_duration_scale") return "Animator duration scale"
+      if (key == "setting.peak_refresh_rate") return "Peak refresh-rate setting"
+      if (key == "setting.min_refresh_rate") return "Minimum refresh-rate setting"
+      return key
+    }
+    BEGIN { print "metric\tbefore\tafter\tchange" }
+    FNR == 1 { next }
+    FNR == NR { b[$1]=$2; next }
+    interesting($1) { a[$1]=$2; order[++n]=$1 }
+    END {
+      for (i=1;i<=n;i++) {
+        k=order[i]; ar=a[k]; br=(k in b)?b[k]:"n/a"; d=(ar+0)-(br+0)
+        if (is_kb(k) && is_num(ar) && is_num(br)) { bs=gb(br); as=gb(ar); cs=(d>0?"+":"") sprintf("%.1f GB",d/1048576) }
+        else if (is_count(k) && is_num(ar) && is_num(br)) { bs=br; as=ar; cs=(d>0?"+":"") d }
+        else { bs=br; as=ar; cs=(is_num(ar)&&is_num(br))?(d==0?"unchanged":(d>0?"+":"") sprintf("%.2f",d)):(ar==br?"unchanged":"changed") }
+        print label_for(k) "\t" bs "\t" as "\t" cs
+      }
+    }
+  ' "$before" "$after" > "$dir/before-after.tsv"
+  awk -F'\t' 'BEGIN { print "# Before / after\n\n| Metric | Before | After | Change |\n|---|---:|---:|---:|" } NR>1 { printf "| %s | %s | %s | %s |\n",$1,$2,$3,$4 }' \
+    "$dir/before-after.tsv" > "$dir/before-after.md"
 }
 
 do_compare() {
@@ -575,6 +780,7 @@ do_compare() {
   stats_before="$dir/stats-before.tsv"
   stats_after="$dir/stats-after.tsv"
   if [ -f "$stats_before" ] && [ -f "$stats_after" ]; then
+    save_before_after_report "$stats_before" "$stats_after" "$dir"
     show_stats_diff "$stats_before" "$stats_after"
   elif [ -f "$dir/before.txt" ] && [ -f "$dir/after.txt" ]; then
     show_before_after "$dir/before.txt" "$dir/after.txt"
@@ -586,19 +792,23 @@ do_compare() {
 # ------------------------------------------------------------------ report
 do_report() {
   head1 "Device"
-  say "  Model      : $(adbs getprop ro.product.model)"
+  say "  Name       : ${MARKET_NAME:-$MODEL}"
+  say "  Model      : $MODEL"
+  say "  Maker      : $MANUFACTURER"
   say "  Target     : $DEVICE_LABEL"
   say "  Product    : $(adbs getprop ro.product.name)"
   say "  Android    : $(adbs getprop ro.build.version.release) (SDK $(adbs getprop ro.build.version.sdk))"
-  say "  One UI     : $(oneui_version "$(adbs getprop ro.build.version.oneui)")"
-  say "  Build      : $(adbs getprop ro.build.display.id)"
-  say "  Security   : $(adbs getprop ro.build.version.security_patch)"
+  say "  Skin       : $SKIN"
+  say "  Build      : $BUILD"
+  say "  Security   : $SECURITY_PATCH"
+  say "  Profile    : ${DEVICE_PROFILE:-${DEVICE_CLASS}}"
   say "  CSC        : $(adbs getprop ro.csc.sales_code) / $(adbs getprop ro.csc.countryiso_code)"
   say "  ABI        : $(adbs getprop ro.product.cpu.abi)"
 
   head1 "Display"
   adbs "wm size" | sed 's/^/  /'
   adbs "wm density" | sed 's/^/  /'
+  say "  Max mode   : $MAX_REFRESH_RATE Hz"
   say "  Refresh    : $(adbs 'dumpsys display | grep -o "renderFrameRate [0-9.]*" | head -1')"
   say "  Animations : $(adbs 'settings get global window_animation_scale') / $(adbs 'settings get global transition_animation_scale') / $(adbs 'settings get global animator_duration_scale')"
 
@@ -657,7 +867,12 @@ list_profile_set() {
 }
 
 do_list() {
-  list_profile_set "Galaxy tablet / Android profiles" "$PROFILES"
+  list_profile_set "Android base / Samsung profiles" "$PROFILES"
+  for file in "$PROFILES"/packages-*.tsv; do
+    [ -f "$file" ] || continue
+    head1 "$(basename "$file" .tsv) exact-device additions - $(count_rows "$file" 3) packages"
+    ts_filter "$file" 3 | awk -F'\t' '{printf "  [tier %s] %-52s %s\n",$1,$2,$4}'
+  done
   head1 "keep groups (never removed by a tablet or phone profile)"
   awk -F'\t' '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=4 {printf "  %-20s %-52s %s\n", $1, $2, $4}' "$PROFILES/keep.tsv"
   list_profile_set "Galaxy Watch / Wear OS profiles" "$PROFILES/watch"
@@ -683,7 +898,7 @@ new_backup_dir() {
     keep_info="$(keep_words | tr '\n' ',' | sed 's/,$//')"
   fi
   {
-    echo "Universal Samsung Optimiser v$VERSION"
+    echo "Universal Android Optimiser v$VERSION"
     echo "date      : $(date)"
     echo "profile   : $PROFILE"
     echo "keep      : $keep_info"
@@ -693,12 +908,17 @@ new_backup_dir() {
     echo "dexopt    : $WANT_DEXOPT"
     echo "reboot    : $WANT_REBOOT"
     echo "serial    : $SERIAL"
+    echo "profile-id: $DEVICE_PROFILE"
+    echo "maker     : $MANUFACTURER"
     echo "model     : $MODEL"
     echo "device    : $DEVICE"
     echo "class     : $DEVICE_CLASS"
     echo "hardware  : $HARDWARE_ID"
     echo "android   : $RELEASE"
-    echo "oneui     : $ONUI"
+    echo "skin      : $SKIN"
+    echo "build     : $BUILD"
+    echo "security  : $SECURITY_PATCH"
+    echo "max-hz    : $MAX_REFRESH_RATE"
     echo "host      : $(uname -s) $(uname -r)"
   } > "$dir/info.txt"
   LAST_BACKUP="$dir"
@@ -706,8 +926,7 @@ new_backup_dir() {
 
 latest_backup() {
   local info dir
-  for info in "$BACKUP_ROOT"/[0-9]*/info.txt "$BACKUP_ROOT"/watch-*/*/info.txt; do
-    [ -f "$info" ] || continue
+  find "$BACKUP_ROOT" -type f -name info.txt 2>/dev/null | while IFS= read -r info; do
     dir="${info%/info.txt}"
     printf '%s\t%s\n' "${dir##*/}" "$dir"
   done | sort | tail -1 | cut -f2-
@@ -787,20 +1006,55 @@ show_before_after() { # show_before_after <before-file> <after-file>
   dim "  RAM is an immediate reading; compare again after reboot for a stable result."
 }
 
+wait_for_device_boot() {
+  local timeout="${1:-240}" attempts i state booted
+  attempts=$((timeout/2)); [ "$attempts" -gt 0 ] || attempts=1; i=0
+  while [ "$i" -lt "$attempts" ]; do
+    state="$(adb_raw get-state 2>/dev/null || true)"
+    if [ "$state" = "device" ]; then booted="$(adbs "getprop sys.boot_completed")"; [ "$booted" = "1" ] && { sleep 5; return 0; }; fi
+    sleep 2; i=$((i+1))
+  done
+  return 1
+}
+
+post_apply_health() {
+  local users="$1" out="$2" u pkg reason home_holder healthy=1
+  : > "$TMP/health-packages.txt"
+  for u in $users; do adbs "pm list packages --user $u" | sed 's/^package://' >> "$TMP/health-packages.txt"; done
+  sort -u "$TMP/health-packages.txt" -o "$TMP/health-packages.txt"
+  printf 'check\tresult\tdetail\n' > "$out"
+  while IFS='	' read -r pkg reason; do
+    [ -n "${pkg:-}" ] || continue
+    if grep -qxF "$pkg" "$TMP/health-packages.txt"; then printf 'protected:%s\tok\t%s\n' "$pkg" "$reason" >> "$out"
+    else printf 'protected:%s\tFAIL\t%s\n' "$pkg" "$reason" >> "$out"; fail "post-run safety check: protected package missing: $pkg"; healthy=0; fi
+  done < "$TMP/runtime-protected.tsv"
+  if [ "$DEVICE_CLASS" != "watch" ]; then
+    for u in $users; do
+      home_holder="$(adbs "cmd role get-role-holders --user $u android.app.role.HOME" | head -1)"
+      if [ -n "$home_holder" ]; then printf 'home:user:%s\tok\t%s\n' "$u" "$home_holder" >> "$out"
+      else printf 'home:user:%s\tFAIL\t\n' "$u" >> "$out"; fail "post-run safety check: user $u has no default launcher"; healthy=0; fi
+    done
+  fi
+  [ "$healthy" -eq 1 ] && { ok "post-run safety checks passed"; return 0; }
+  return 1
+}
+
 # ------------------------------------------------------------------ apply
 do_apply() {
-  local tier users u total=0 rc pkg cat action before_file after_file keep_file settings_count
+  local tier users u total=0 rc pkg cat action before_file after_file keep_file settings_count reason after_stats
   tier="$(profile_tier "$PROFILE")" || die "unknown profile '$PROFILE' (use light, balanced or aggressive)"
 
   require_device
   users="$(resolve_users)"
   [ -z "$users" ] && die "could not determine any user profile"
+  build_runtime_protection "$users"
 
   head1 "Plan"
   say "  Target     : $DEVICE_LABEL"
   say "  Profile    : ${C_BOLD}$PROFILE${C_RESET} (tier <= $tier)"
-  say "  Packages   : $(count_rows "$PACKAGES_FILE" "$tier")"
-  settings_count="$(awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" | wc -l | tr -d ' ')"
+  [ -n "$DEVICE_PROFILE" ] && say "  Device     : $DEVICE_PROFILE"
+  say "  Packages   : $(count_package_rows "$tier")"
+  settings_count="$(setting_rows "$tier" | wc -l | tr -d ' ')"
   if [ "$APPLY_SETTINGS" -eq 1 ]; then
     say "  Settings   : $settings_count"
   else
@@ -813,11 +1067,14 @@ do_apply() {
     else
       say "  Keep       : ${C_YELLOW}none - every package in the profile can be removed${C_RESET}"
     fi
+    say "  Active     : $(cut -f1 "$TMP/runtime-protected.tsv" | sort -u | wc -l | tr -d ' ') installed defaults/services protected automatically"
   fi
   [ "$WANT_EXTRAS" -eq 1 ] && say "  Extras     : ${C_YELLOW}yes - device-critical optional services will be changed${C_RESET}"
   [ "$DISABLE_PRELOADS" -eq 1 ] && say "  Preloads   : disabled (kept on disk) instead of deleted"
+  [ "$DISABLE_PRELOADS" -eq 1 ] || warn "data-installed target apps, if any, will be deleted with their app data (use --disable-preloads to prevent this)"
   [ "$WANT_TRIM" -eq 1 ] && say "  Cache      : trim after package changes"
-  [ "$WANT_REBOOT" -eq 1 ] && say "  Reboot     : yes, after statistics are captured"
+  if [ "$WANT_REBOOT" -eq 1 ] && [ "$DEVICE_CLASS" != "watch" ]; then say "  Reboot     : yes; final after snapshot will be captured post-reboot"
+  elif [ "$WANT_REBOOT" -eq 1 ]; then say "  Reboot     : yes, after immediate statistics are captured"; fi
   [ "$DRY_RUN" -eq 1 ] && say "  Mode       : ${C_YELLOW}dry run - nothing will change${C_RESET}"
 
   if [ "$DRY_RUN" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
@@ -850,12 +1107,18 @@ do_apply() {
     cache_packages "$u"
 
     info "Applying package profile"
-    ts_filter "$PACKAGES_FILE" "$tier" > "$TMP/list.txt"
+    package_rows "$tier" > "$TMP/list.txt"
     if [ "$WANT_EXTRAS" -eq 1 ]; then
       ts_filter "$EXTRAS_FILE" 9 >> "$TMP/list.txt"
     fi
     while IFS='	' read -r _ pkg cat _note action; do
       [ -z "${pkg:-}" ] && continue
+      pkg_installed "$u" "$pkg" || continue
+      if is_protected "$pkg"; then
+        reason="$(protection_reason "$pkg")"; [ -n "$reason" ] || reason="safety blocklist"
+        printf '    %s# %-46s%s %s (%s)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat" "$reason"
+        continue
+      fi
       if [ -s "$keep_file" ] && grep -qxF "$pkg" "$keep_file"; then
         printf '    %s= %-46s%s %s (kept)\n' "$C_DIM" "$pkg" "$C_RESET" "$cat"
         continue
@@ -867,7 +1130,7 @@ do_apply() {
 
   head1 "System settings"
   if [ "$APPLY_SETTINGS" -eq 1 ]; then
-    awk -F'\t' -v m="$tier" '{sub(/\r$/,"")} !/^[[:space:]]*#/ && NF>=5 && $1+0<=m+0' "$SETTINGS_FILE" > "$TMP/settings.txt"
+    setting_rows "$tier" > "$TMP/settings.txt"
     while IFS='	' read -r _ ns key val note; do
       [ -z "${ns:-}" ] && continue
       apply_setting "$ns" "$key" "$val" "$note"
@@ -889,27 +1152,42 @@ do_apply() {
     ok "dexopt job finished"
   fi
 
-  if [ "$DRY_RUN" -eq 0 ]; then
-    snapshot_stats "$LAST_BACKUP/stats-after.tsv"
-    ok "statistics captured (after)"
-  fi
-
   if [ "$DRY_RUN" -eq 1 ]; then
     head1 "Done"
     say "  Dry run complete - nothing was changed."
   else
+    after_stats="$LAST_BACKUP/stats-after.tsv"
     after_file="$LAST_BACKUP/after.txt"
-    capture_snapshot "$after_file" "$users"
-    show_before_after "$before_file" "$after_file"
+    if [ "$WANT_REBOOT" -eq 1 ] && [ "$DEVICE_CLASS" != "watch" ]; then
+      snapshot_stats "$LAST_BACKUP/stats-after-pre-reboot.tsv"
+      capture_snapshot "$LAST_BACKUP/after-pre-reboot.txt" "$users"
+      ok "immediate post-change statistics captured"
+      info "Rebooting device before the final after snapshot"
+      adb_raw reboot >/dev/null
+      if wait_for_device_boot 240; then
+        ok "device boot completed"
+        snapshot_stats "$after_stats"; capture_snapshot "$after_file" "$users"
+        ok "statistics captured (after reboot)"
+      else warn "device did not finish booting before the timeout; final after snapshot was not created"; fi
+    else
+      snapshot_stats "$after_stats"; capture_snapshot "$after_file" "$users"; ok "statistics captured (after)"
+    fi
+    if [ -f "$after_stats" ]; then
+      post_apply_health "$users" "$LAST_BACKUP/safety-checks.tsv" || true
+      save_before_after_report "$LAST_BACKUP/stats-before.tsv" "$after_stats" "$LAST_BACKUP"
+      head1 "Before / after"; show_stats_diff "$LAST_BACKUP/stats-before.tsv" "$after_stats"
+    fi
+    [ -f "$after_file" ] && show_before_after "$before_file" "$after_file"
     head1 "Done"
     say "  $total package actions applied."
     say "  Backup: $LAST_BACKUP"
+    [ -f "$LAST_BACKUP/before-after.md" ] && say "  Report: $LAST_BACKUP/before-after.md"
     say "  Undo  : ./run.sh --restore"
-    dim  "  A reboot is recommended so every change takes effect."
+    [ "$WANT_REBOOT" -eq 1 ] || dim "  A reboot is recommended so every change takes effect."
     [ "$DEVICE_CLASS" = "watch" ] && dim "  Turn off ADB debugging and wireless debugging on the watch when finished."
   fi
 
-  if [ "$WANT_REBOOT" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
+  if [ "$WANT_REBOOT" -eq 1 ] && [ "$DRY_RUN" -eq 0 ] && [ "$DEVICE_CLASS" = "watch" ]; then
     info "Rebooting device"
     adb_raw reboot
   fi
@@ -1014,14 +1292,14 @@ do_restore_all() {
 
   if [ "$ASSUME_YES" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
     printf '\n  This reinstalls ~%s packages on all users. Continue? [y/N] ' \
-      "$( (ts_filter "$PACKAGES_FILE" 9; ts_filter "$EXTRAS_FILE" 9) | wc -l | tr -d ' ')"
+      "$( (package_rows 9; ts_filter "$EXTRAS_FILE" 9) | wc -l | tr -d ' ')"
     read -r answer
     case "$answer" in y|Y|yes|YES) ;; *) say "  cancelled."; exit 0 ;; esac
   fi
 
   for u in $(resolve_users); do
     head1 "User $u - $(user_label "$u")"
-    (ts_filter "$PACKAGES_FILE" 9; ts_filter "$EXTRAS_FILE" 9) > "$TMP/all.txt"
+    (package_rows 9; ts_filter "$EXTRAS_FILE" 9) > "$TMP/all.txt"
     while IFS='	' read -r _ pkg cat _note action; do
       [ -z "${pkg:-}" ] && continue
       if [ "$DRY_RUN" -eq 1 ]; then
@@ -1040,7 +1318,7 @@ do_restore_all() {
         esac
       fi
     done < "$TMP/all.txt"
-    [ "$DEVICE_CLASS" != "watch" ] && adbs "pm enable --user $u 'com.android.chrome'" >/dev/null 2>&1
+    [ "$DEVICE_CLASS" != "watch" ] && [ "$DRY_RUN" -eq 0 ] && adbs "pm enable --user $u 'com.android.chrome'" >/dev/null 2>&1
   done
 
   head1 "Restoring default settings"
@@ -1053,7 +1331,7 @@ do_restore_all() {
     adbs "settings put global animator_duration_scale 1.0" >/dev/null
     adbs "settings delete global cached_apps_freezer" >/dev/null
     if [ "$DEVICE_CLASS" != "watch" ]; then
-      adbs "settings put global sem_enhanced_cpu_responsiveness 0" >/dev/null
+      if [ "$(printf '%s' "$MANUFACTURER" | tr '[:upper:]' '[:lower:]')" = "samsung" ]; then adbs "settings put global sem_enhanced_cpu_responsiveness 0" >/dev/null; fi
       adbs "settings put global wifi_scan_always_enabled 1" >/dev/null
       adbs "settings put global ble_scan_always_enabled 1" >/dev/null
       adbs "settings delete system min_refresh_rate" >/dev/null
@@ -1113,7 +1391,7 @@ while [ $# -gt 0 ]; do
     --list)      MODE="list"; shift ;;
     --report)    MODE="report"; shift ;;
     --help|-h)   usage; exit 0 ;;
-    --version)   echo "universal-samsung-optimiser $VERSION"; exit 0 ;;
+    --version)   echo "universal-android-optimiser $VERSION"; exit 0 ;;
     *)           fail "unknown argument: $1"; say ""; usage; exit 2 ;;
   esac
 done
@@ -1138,17 +1416,17 @@ esac
 # ------------------------------------------------------------------ no profile? show a menu
 if [ -z "$PROFILE" ]; then
   require_device
-  head1 "Universal Samsung Optimiser v$VERSION"
-  say "  Device: ${C_BOLD}${MODEL}${C_RESET} - Android ${RELEASE}${ONUI} ($DEVICE_LABEL)"
+  head1 "Universal Android Optimiser v$VERSION"
+  say "  Device: ${C_BOLD}${MARKET_NAME:-$MODEL}${C_RESET} - Android ${RELEASE}${SKIN:+ / $SKIN} ($DEVICE_LABEL)"
   say ""
   if [ "$DEVICE_CLASS" = "watch" ]; then
     say "  ${C_BOLD}1)${C_RESET} light       - retail demo, certification and factory test leftovers"
     say "  ${C_BOLD}2)${C_RESET} balanced    - + Bixby, customisation and enterprise provisioning"
     say "  ${C_BOLD}3)${C_RESET} aggressive  - + optional apps; calls, messages and health stay"
   else
-    say "  ${C_BOLD}1)${C_RESET} light       - telemetry, diagnostics, AR toys, preloads"
-    say "  ${C_BOLD}2)${C_RESET} balanced    - + Bixby, Samsung extras, gaming services, TTS packs"
-    say "  ${C_BOLD}3)${C_RESET} aggressive  - + browsers, YouTube, Samsung account apps (Teams/Gmail/Office/phone kept)"
+    say "  ${C_BOLD}1)${C_RESET} light       - telemetry, diagnostics, ads and factory tools"
+    say "  ${C_BOLD}2)${C_RESET} balanced    - + optional OEM/Google services and gaming extras"
+    say "  ${C_BOLD}3)${C_RESET} aggressive  - + replaceable browser, media and productivity apps"
   fi
   say "  ${C_BOLD}4)${C_RESET} restore     - undo the last run"
   say "  ${C_BOLD}5)${C_RESET} report      - show device info without changing anything"

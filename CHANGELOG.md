@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.0
+
+- Expanded the project to **Universal Android Optimiser** while preserving the dedicated
+  Galaxy Watch profiles introduced in 1.3.
+- Added an exact Xiaomi Redmi 10 profile for `21061119DG` / `eos`, validated against a
+  connected MIUI 14.0.7 Global phone. Xiaomi telemetry, MSA ads, factory tools and
+  optional apps are tiered in `profiles/packages-redmi-10.tsv`.
+- Added `profiles/devices.tsv`; OEM additions require an exact manufacturer, codename
+  and model match rather than being guessed from a brand.
+- Refresh values are detected from advertised display modes. Samsung's CPU-performance
+  setting is now scoped to Samsung and is never written to Xiaomi devices.
+- The selected launcher, dialer, SMS app, browser, keyboard, installed accessibility
+  services and notification listeners are protected dynamically.
+- Settings writes are read back and reported as rejected when an OEM (notably MIUI
+  without USB debugging security permission) does not accept them.
+- Before/after capture now includes setting readbacks and target/protected package counts,
+  writes Markdown/TSV reports, and captures a post-reboot final snapshot on phones/tablets.
+- Phone/tablet cumulative histories are isolated by ADB serial, extending the existing
+  per-watch isolation and preventing cross-device restores.
+- Verified Redmi aggressive with preload preservation: 451 -> 407 installed packages,
+  all 29 present protected packages retained, and available RAM measured 1.1 -> 2.3 GB
+  after reboot. MIUI settings remained unchanged and were reported honestly.
+
 ## 1.3.1
 
 - **Phone keep list.** New `profiles/keep.tsv` with six groups - `teams`,

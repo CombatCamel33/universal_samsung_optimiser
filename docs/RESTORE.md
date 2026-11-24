@@ -12,7 +12,8 @@ most thorough.
 
 That reads:
 
-* tablet: `backups/applied.tsv` and `backups/original-settings.tsv`
+* phone/tablet: `backups/device-<adb-serial>/applied.tsv` and
+  `original-settings.tsv`
 * watch: `backups/watch-<model>-<hardware-id>/applied.tsv` and
   `original-settings.tsv`
 
@@ -34,9 +35,9 @@ Each run also writes its own folder, including `stats-before.tsv` / `stats-after
 
 ```bash
 ls backups/
-# 20261122-102743  20261122-102828  20261122-102849
-./run.sh --restore backups/20261122-102849
-./run.sh --compare backups/20261122-102849   # before/after statistics
+# Phone/tablet histories are isolated by ADB serial:
+./run.sh --restore backups/device-<serial>/20261122-102849
+./run.sh --compare backups/device-<serial>/20261122-102849
 
 # Watch histories are isolated by hardware id:
 ./run.sh --restore backups/watch-SM-R930-.../20261123-120000

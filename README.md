@@ -1,11 +1,11 @@
-# Universal Samsung Optimiser
+# Universal Android Optimiser
 
-One-command, **fully reversible**, device-aware ADB optimiser for the Samsung Galaxy
-Tab S10 FE+, Galaxy phones and Galaxy Watch6.
+One-command, **fully reversible**, device-aware ADB optimiser with tested profiles for
+Samsung Galaxy tablets/phones, Galaxy Watch6 and Xiaomi Redmi 10.
 
-It detects tablets versus Wear OS watches before loading a profile, removes background
-bloat, shortens sluggish animations, and tunes each device with settings that are valid
-for its hardware. Works on **macOS, Windows and Linux**. No root or custom ROM.
+It detects Wear OS and exact phone/tablet models before loading OEM additions, removes
+background bloat, and resolves display settings from modes advertised by the hardware.
+Works on **macOS, Windows and Linux**. No root or custom ROM.
 
 Teams, Samsung Internet, the Microsoft Office apps, Gmail, Messages and the
 phone/telephony services are **kept on every tablet or phone by default** - a connected phone
@@ -67,8 +67,21 @@ RAM varies with running apps; the post-reboot figure is a point-in-time comparis
 
 Watch detection, inventory, reporting, protected-package checks, all three dry-run plans,
 and the full aggressive profile were validated on this device. The watch has a separate
-package/settings profile; the tablet's 90 Hz and CPU-performance overrides can never be
-selected for it.
+package/settings profile; phone/tablet refresh and CPU-performance overrides can never
+be selected for it.
+
+### Redmi 10
+
+| | |
+|---|---|
+| Device | Xiaomi Redmi 10 (`21061119DG` / `eos`) |
+| OS | Android 13, MIUI 14.0.7 Global |
+| Build | `V14.0.7.0.TKUMIXM` |
+| RAM | 4 GB |
+| Display | 1080 × 2400, 60/90 Hz |
+
+The exact Redmi profile requires manufacturer, codename and model to match
+`profiles/devices.tsv`; Xiaomi packages are never guessed from the brand alone.
 
 The tablet/phone profile still only touches packages that exist on the target, so it also
 works on the S10 FE, S9 FE, and Tab S9/S10 series. Its full aggressive list contains the
@@ -136,6 +149,28 @@ Knox, Secure Folder, the OTA updater and the Samsung account were untouched (no
 after the reboot. Figures come from
 `backups/20261123-131937/stats-before.tsv` and `stats-after.tsv`.
 
+## Results on a Redmi 10 (real run)
+
+Applied on 24 Nov 2026 with `aggressive -DisablePreloads -Reboot`. Drive, Photos,
+MIUI Screen Recorder, Mi Scanner and Mi Remote were disabled rather than deleted.
+Launcher, dialer, SMS, browser, keyboard, the installed accessibility service,
+notification listeners, Office, Teams, Gmail and telephony/IMS remained present.
+
+| Metric | Before | After reboot | Change |
+|---|---:|---:|---:|
+| Installed packages (user 0) | 451 | 407 | **-44** |
+| Disabled packages (user 0) | 3 | 7 | +4 |
+| Profile packages still present | 63 | 19 | **-44** |
+| Protected packages present | 29 | 29 | unchanged |
+| Available RAM | 1.1 GB | 2.3 GB | **+1.2 GB** |
+| Storage used / free | 65.0 / 39.7 GB | 64.8 / 39.9 GB | -0.2 / +0.2 GB |
+
+There were 49 package actions: 44 per-user uninstalls and five safe disables. MIUI
+rejected the ADB settings writes on this build, so animations and refresh rate remained
+at 1.0× and 60 Hz. Version 1.4 verifies every settings write by reading it back instead
+of claiming a tweak that did not stick. RAM is volatile; package/protection counts are
+the reliable result.
+
 ## Requirements
 
 1. **Android platform-tools** (the `adb` binary)
@@ -143,8 +178,8 @@ after the reboot. Figures come from
    - Windows: [download platform-tools](https://developer.android.com/tools/releases/platform-tools) and unzip it
    - Linux: `sudo apt install android-tools-adb` (or your distro's package)
 2. A debugging connection:
-   - **Tablet (USB):**
-     - Settings → About tablet → Software information → tap **Build number** 7 times
+   - **Phone/tablet (USB):**
+     - Settings → About phone/tablet → Software information → tap **Build number** 7 times
      - Settings → Developer options → enable **USB debugging**
      - Connect a USB **data** cable and accept the RSA prompt
    - **Galaxy Watch (wireless):**
@@ -189,17 +224,19 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1 balanced
 
 Every profile is cumulative: `balanced` includes `light`, `aggressive` includes both.
 
-### Tablet profiles
+### Phone/tablet base and exact-device profiles
 
 | Profile | Packages | What it adds |
 |---|---|---|
-| `light` | 30 | Pure telemetry, diagnostics, factory test apps, AR-emoji toys, the preloaded Asphalt demo, duplicate CTS shims |
-| `balanced` | 110 | + Bixby, Samsung Customization/Context services, Device Security (McAfee), Edge panels, Modes & Routines, Digital Wellbeing, Game Optimizing Service, 18 Samsung TTS language packs, ARCore, Link-to-Windows |
-| `aggressive` | 164 | + Chrome/Samsung Internet, YouTube, Google app, Maps, Gmail, Photos, Messages, Meet, Gemini, the whole Microsoft Office suite, Samsung Pass/Cloud, SmartThings, telephony stack. **Teams, Samsung Internet, Office, Gmail, Messages and phone services are kept by default** |
+| `light` | 29 base + 8 Redmi | Telemetry, diagnostics, factory tools, AR toys and MIUI ads/analytics |
+| `balanced` | 110 base + 15 Redmi | + optional Samsung/Google services or Xiaomi Games/GetApps/Cleaner |
+| `aggressive` | 164 base + 23 Redmi | + replaceable browser, media, productivity and OEM apps. **Teams, Samsung Internet, Office, Gmail, Messages and phone services are kept by default** |
 | `--extras` | +17 | Knox/Secure Folder, OTA updater, Samsung account. **Opt-in only** — breaks Secure Folder and security updates |
 | `--disable-preloads` | flag | Hides `/data`-installed preloads instead of deleting them, so they stay restorable |
 
-`light` is safe for anyone. `balanced` is what I run daily. `aggressive` is for a tablet or phone used as a browser + media device. The 164 count is the full `--no-keep` list; with the default keep list about 30 of those packages are reported as `(kept)` and skipped.
+Device additions are cumulative and load only for an exact match. The Redmi profile also
+hard-protects MIUI Home, Security, Package Installer, updater, account/cloud, Find Device,
+telephony overlays and Xiaomi Service Framework.
 
 ### Galaxy Watch profiles
 
@@ -358,9 +395,13 @@ Notes:
 ### Automatic before / after
 
 Every real profile run captures a baseline before making changes and a second snapshot
-afterward. The terminal and backup show installed/enabled package counts, available RAM,
-free `/data` storage, and battery level. The immediate RAM number is indicative only;
-reboot before making a stable comparison.
+afterward. It writes `before-after.md` and `before-after.tsv` with package counts,
+profile targets still present, protected counts, RAM, storage and tweak readbacks.
+
+For phones/tablets, `--reboot` saves an immediate `stats-after-pre-reboot.tsv`, waits for
+Android to finish booting, then records the authoritative `stats-after.tsv` and runs
+default-app safety checks. Watch runs retain immediate capture because wireless ADB may
+not reconnect on the same endpoint after reboot.
 
 Dry runs capture and print only the current baseline—nothing is written to `backups/`.
 
@@ -379,10 +420,10 @@ what is open at the moment, so package counts and storage are the reliable numbe
 
 ## System tweaks
 
-The animation/freezer settings apply to both device families. Reduce transparency and
-blur is **watch-only**; the remaining performance, scan and refresh-rate settings are
-**tablet-only**. The Watch6 has a fixed 60 Hz panel and never receives tablet display or
-Samsung CPU-performance overrides.
+The animation/freezer settings apply across device families. Reduce transparency and
+blur is **watch-only**. Phone/tablet refresh values are capability-detected, and the
+Samsung CPU-performance key is scoped to Samsung only. The Watch6 profile remains
+separate and never receives phone/tablet display overrides.
 
 | Tweak | Why |
 |---|---|
@@ -391,11 +432,11 @@ Samsung CPU-performance overrides.
 | `animator_duration_scale` → `0.5` | Same for in-app animations. |
 | `cached_apps_freezer` → `enabled` | Freezes cached background apps instead of keeping them resident. |
 | `accessibility_reduce_transparency` → `1` *(watch)* | Enables Accessibility → Visibility enhancements → Reduce transparency and blur, reducing compositing overhead. |
-| `peak_refresh_rate` → `90` | Never caps the 90 Hz panel. |
+| `peak_refresh_rate` → detected maximum | Uses a mode advertised by the connected panel instead of assuming 90 Hz. |
 | `sem_enhanced_cpu_responsiveness` → `1` *(balanced)* | Samsung's "Processing speed: High" scheduler mode. |
-| `min_refresh_rate` → `60` *(balanced)* | Stops the panel dropping to 30 Hz and making scrolling judder. |
+| `min_refresh_rate` → up to `60` *(balanced)* | Never requests more than the display supports. |
 | `wifi_scan_always_enabled` / `ble_scan_always_enabled` → `0` *(balanced)* | Stops background radio scanning when the radios are off. |
-| `min_refresh_rate` → `90` *(aggressive)* | Locks the panel at 90 Hz at all times. |
+| `min_refresh_rate` → detected maximum *(aggressive)* | Locks the panel at its maximum; smoothest, with higher battery use. |
 
 ## Reversibility
 
@@ -418,14 +459,17 @@ must be downloaded again; use `--disable-preloads` to disable and preserve them 
 
 ```
 backups/
-├── applied.tsv              every package action ever taken (user, package, action)
-├── original-settings.tsv    the original value of every setting touched
-├── 20261122-102849/         one folder per tablet/phone run:
+├── device-<adb-serial>/     isolated per-phone/tablet history
+│   ├── applied.tsv
+│   ├── original-settings.tsv
+│   └── 20261122-102849/
 │   ├── info.txt             device, profile, keep groups
 │   ├── packages.tsv         that run's package changes
 │   ├── settings.tsv         that run's setting changes
 │   ├── stats-before.tsv     device statistics before the run
-│   └── stats-after.tsv      device statistics after the run
+│   ├── stats-after.tsv      final statistics (post-reboot when requested)
+│   ├── before-after.md      human-readable comparison
+│   └── safety-checks.tsv    active/default app verification
 └── watch-SM-R930-…/         isolated per-watch history
     ├── applied.tsv
     ├── original-settings.tsv
@@ -445,7 +489,7 @@ On Windows: `.\run.ps1 -Restore`, `.\run.ps1 -RestoreAll`.
 Restoring puts the system apps back exactly as they were (same user, data intact).
 Reboot afterwards.
 
-Watch and tablet histories are isolated, and an explicitly selected backup is rejected
+Watch and every phone/tablet history are isolated, and an explicitly selected backup is rejected
 if its recorded device codename/class does not match the connected target.
 
 What a restore cannot bring back are **data-installed preloads** (Office, Samsung
@@ -463,7 +507,7 @@ Use `--disable-preloads` if you want those to stay restorable.
 --user 10        only touch one Android user (repeatable)
 --all-users      every real user profile (default)
 --keep <groups>  keep app groups (default: teams,samsung-internet,office,gmail,messages,phoning)
---no-keep        remove every listed package, including the default keep groups
+--no-keep        disable named keep groups; hard/default-app protection still wins
 --list-keep      print the keep groups and their packages
 --no-settings    remove/disable packages only; leave Android settings untouched
 --trim           clear app caches (pm trim-caches)
@@ -490,10 +534,12 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 - **Protected-package blocklist** refuses to touch core Android packages. On watches it
   additionally protects both System UIs, Wear Services, phone pairing/transport, tiles,
   health services, calls, safety/SOS, Find My Watch, NFC, stores and the Samsung account.
+- **Runtime default protection** preserves installed launcher, dialer, SMS, browser,
+  keyboard, accessibility-service and notification-listener packages on phones/tablets.
 - **Keep list on by default** - Teams, Samsung Internet, Office, Gmail, Messages and the phone/telephony stack are never removed unless you explicitly pass `--no-keep`.
 - **Idempotent.** Running a profile twice does nothing the second time.
 - **No OTA or Knox changes** unless you pass `--extras`.
-- The worst realistic outcome is an app you wanted disappearing from the launcher — `--restore` brings it back in seconds.
+- Device histories are isolated by ADB serial/codename, preventing cross-device restores.
 
 ## Repo layout
 
@@ -504,8 +550,10 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 │   ├── optimiser.sh          macOS + Linux driver
 │   └── optimiser.ps1         Windows driver
 ├── profiles/
-│   ├── packages.tsv          tier, package, category, explanation
-│   ├── settings.tsv          tier, namespace, key, value, explanation
+│   ├── devices.tsv           exact manufacturer/codename/model matches
+│   ├── packages.tsv          Android base + Samsung rows
+│   ├── packages-redmi-10.tsv Redmi 10-only additions
+│   ├── settings.tsv          setting values plus OEM scope
 │   ├── keep.tsv              app groups that are never removed (default: all)
 │   ├── extras.tsv            opt-in Knox / OTA / Samsung account
 │   └── watch/                device-specific packages, settings and extras
@@ -517,8 +565,9 @@ Multi-user tablets: by default every real user profile is debloated, but **Secur
 └── backups/                  generated at run time (git-ignored)
 ```
 
-Want to add or drop a package? Edit `profiles/packages.tsv` for tablets and phones or
-`profiles/watch/packages.tsv` for watches, then run `python3 tools/generate-docs.py`.
+Want to add or drop a package? Edit `profiles/packages.tsv` for the base,
+`profiles/packages-<device>.tsv` for an exact model, or `profiles/watch/packages.tsv`
+for watches, then run `python3 tools/generate-docs.py`.
 Want an app to survive every profile? Add it to a group in `profiles/keep.tsv`.
 
 ## Contributing

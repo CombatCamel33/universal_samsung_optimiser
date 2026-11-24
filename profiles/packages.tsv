@@ -20,7 +20,7 @@
 1	com.samsung.android.svcagent	Samsung	Remote-support agent for Samsung service centres
 1	com.google.android.feedback	Google	Google feedback / crash-reporting uploader
 1	com.google.mainline.telemetry	Google	Mainline (system module) telemetry uploader
-1	com.google.android.gms.location.history	Google	Location History background service
+2	com.google.android.gms.location.history	Google	Location History background service (balanced only because removing it disables Google Timeline)
 1	com.google.android.partnersetup	Google	Installs preload/partner apps on first boot and after updates
 1	com.google.android.printservice.recommendation	Google	Suggests printer plugins you never asked for
 1	com.google.android.apps.carrier.carrierwifi	Google	Carrier Wi-Fi auto-connect (meaningless on a Wi-Fi-only tablet)

@@ -50,6 +50,10 @@ def main():
     extras = list(rows(PROFILES / "extras.tsv"))
     keep = list(rows(PROFILES / "keep.tsv"))
     settings = list(rows(PROFILES / "settings.tsv"))
+    device_packages = {
+        path.stem[len("packages-"):]: list(rows(path))
+        for path in sorted(PROFILES.glob("packages-*.tsv"))
+    }
 
     tiers = {1: [], 2: [], 3: []}
     for r in pkgs:
@@ -74,8 +78,9 @@ phones alike. Every group below is enabled by default:
 
 {keep_table}
 
-Pick specific groups with `--keep <groups>` (repeatable or comma-separated), drop the
-protection entirely with `--no-keep`, or print the list with `--list-keep`. On Windows
+Pick specific groups with `--keep <groups>` (repeatable or comma-separated), disable
+the named groups with `--no-keep`, or print the list with `--list-keep`. Runtime default
+and hard safety protection still apply. On Windows
 the flags are `-Keep`, `-NoKeep`, `-ListKeep` and `-NoSettings`. Kept packages are printed
 with `(kept)` during a run and are skipped before any `pm uninstall` / `pm disable-user`
 call, so they are never touched.
@@ -123,6 +128,16 @@ you pass `--no-keep`.
 
 {table(tiers[3])}
 
+## Exact-device additions
+
+These rows load only after `profiles/devices.tsv` matches manufacturer, codename and
+model. They are never guessed from the brand alone.
+
+""" + "\n\n".join(
+        f"### `{name}` ({len(items)} packages)\n\n{table(items)}"
+        for name, items in device_packages.items()
+    ) + f"""
+
 ## Extras - `--extras` only ({len(extras)} packages)
 
 **Not** part of any profile. These break Secure Folder, OTA security updates
@@ -132,13 +147,14 @@ and the Samsung account. Only use them if you understand that.
 
 ## System settings
 
-Applied with `settings put <namespace> <key> <value>` and restored from
-`backups/original-settings.tsv`.
+Applied with `settings put <namespace> <key> <value>` and restored from the connected
+device's isolated backup history.
 
-| Tier | Setting | Value | Why |
-|---|---|---|---|
+| Tier | Setting | Value | Scope | Why |
+|---|---|---|---|---|
 """ + "\n".join(
-        f"| {t} | `{ns}.{key}` | `{val}` | {note} |" for t, ns, key, val, note in settings
+        f"| {r[0]} | `{r[1]}.{r[2]}` | `{r[3]}` | {r[5] if len(r) > 5 else 'all'} | {r[4]} |"
+        for r in settings
     ) + """
 
 ### What each one does
@@ -155,10 +171,9 @@ state in RAM. With the freezer enabled, they are frozen (CPU and wakelocks stopp
 instead of being allowed to run in the background. Better idle battery, no downside
 for normal use.
 
-**`peak_refresh_rate` / `min_refresh_rate`** - the S10 FE+ panel supports 30, 48, 60
-and 90 Hz. By default it drops to 30 Hz aggressively, which makes scrolling look
-choppy. `peak=90` stops any cap; `min=60` keeps it at 60 Hz or above; `min=90` locks
-it at 90 Hz (smoothest, costs battery).
+**`peak_refresh_rate` / `min_refresh_rate`** - the scripts read the modes advertised by
+the connected display and resolve `__MAX_REFRESH__` dynamically. Balanced never asks
+for more than 60 Hz as its minimum; aggressive locks the advertised maximum.
 
 **`sem_enhanced_cpu_responsiveness` (tier 2)** - the value behind
 Settings → Battery → Processing speed. `0` = optimised, `1` = high, `2` = maximum.
@@ -205,7 +220,8 @@ adb shell pm install-existing --user 0 <package>
 
     OUT.parent.mkdir(exist_ok=True)
     write_utf8_lf(OUT, doc)
-    print(f"wrote {OUT.relative_to(ROOT)} ({len(pkgs)} packages, {len(extras)} extras, {len(keep)} keeps, {len(settings)} settings)")
+    device_count = sum(map(len, device_packages.values()))
+    print(f"wrote {OUT.relative_to(ROOT)} ({len(pkgs)} base packages, {device_count} device packages, {len(extras)} extras, {len(keep)} keeps, {len(settings)} settings)")
 
     watch_dir = PROFILES / "watch"
     watch_pkgs = list(rows(watch_dir / "packages.tsv"))
@@ -291,8 +307,8 @@ These stop OTA update checks/downloads and are intentionally outside every norma
 
 ## Watch-safe settings
 
-The 90 Hz refresh-rate and Samsung CPU-performance settings used on the tablet are not valid
-for the Watch6's fixed 60 Hz panel and are never loaded. Only these settings are applied:
+Phone/tablet refresh-rate and Samsung CPU-performance settings are not loaded on the
+Watch6's fixed 60 Hz panel. Only these watch settings are applied:
 
 | Tier | Setting | Value | Why |
 |---|---|---|---|

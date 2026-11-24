@@ -118,12 +118,22 @@ adb shell pm install-existing --user 10 <package>
 This section is tablet-only. The Watch6 panel is fixed at 60 Hz and the watch profile
 never writes a refresh-rate override.
 
-Some One UI builds reset it when the display mode changes. Re-run the profile, or set
-it manually:
+Some OEM builds reset it when display mode or battery saver changes. Re-run the profile,
+which detects the panel maximum, or inspect the current values:
 
 ```bash
-adb shell settings put system min_refresh_rate 90
+adb shell settings get system peak_refresh_rate
+adb shell settings get system min_refresh_rate
 ```
+
+Do not copy a 90/120/144 Hz value from another model.
+
+## MIUI says a setting was not applied
+
+Some Xiaomi builds permit package operations but reject `settings put`. The optimiser
+reads each value back and reports **not applied** instead of claiming success. To permit
+ADB settings, enable Xiaomi's separate **USB debugging (Security settings)** developer
+option, reconnect/reauthorise, and rerun. Package changes/restores do not need that toggle.
 
 ## Multiple devices connected
 

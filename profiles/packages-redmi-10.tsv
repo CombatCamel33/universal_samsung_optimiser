@@ -1,0 +1,36 @@
+# Redmi 10 (21061119DG / eos) additions
+# tier	package	category	what it is / why it can go
+# ---------------------------------------------------------------------------------------------------
+# This list was built from the packages actually present on MIUI 14.0.7 Global.
+# It intentionally excludes the MIUI launcher, Security, Package Installer,
+# updater, telephony/IMS, Xiaomi account/cloud, Find Device, Bluetooth extension,
+# Gallery/editor, casting, wallpaper and Xiaomi Service Framework components.
+
+# ---------------------------------------------------------------- TIER 1: telemetry, ads and factory tools
+1	com.miui.analytics	Xiaomi	Xiaomi Analytics telemetry client; runs in the background and uploads usage events
+1	com.miui.msa.global	Xiaomi	MIUI System Ads service (MSA); supplies advertising and recommendations across MIUI
+1	com.miui.daemon	Xiaomi	MIUI diagnostics and telemetry daemon; not required for core phone functions
+1	com.miui.bugreport	Xiaomi	Services & Feedback bug-report uploader
+1	com.miui.miservice	Xiaomi	Xiaomi Services & Feedback client
+1	com.xiaomi.mtb	Factory	MediaTek/Xiaomi modem factory-test harness (MTB), not part of normal telephony
+1	com.xiaomi.payment	Xiaomi	Legacy Mi Credit/Payment stub on the Global ROM
+1	org.mipay.android.manager	Xiaomi	Mi Pay service stub on the Global ROM
+
+# ---------------------------------------------------------------- TIER 2: optional Xiaomi services
+2	com.xiaomi.glgm	Xiaomi	Xiaomi Games / game recommendations client
+2	com.xiaomi.mipicks	Xiaomi	GetApps (Mi Picks), Xiaomi's secondary app store and recommendation client
+2	com.miui.cleaner	Xiaomi	MIUI Cleaner app and its resident background process
+2	com.xiaomi.cameratools	Factory	Hidden CameraTools factory/diagnostic package, not the Camera app
+2	com.miui.phrase	Xiaomi	MIUI Frequent Phrases feature
+2	com.miui.qr	Xiaomi	Standalone MIUI QR scanner
+2	com.xiaomi.barrage	Xiaomi	Bullet-screen notification feature; automatically kept if its notification listener is enabled
+
+# ---------------------------------------------------------------- TIER 3: replaceable user-facing apps
+3	com.miui.player	Xiaomi	Mi Music player
+3	com.miui.videoplayer	Xiaomi	Mi Video player and recommendations client
+3	com.miui.fm	Xiaomi	MIUI FM Radio user interface
+3	com.miui.fmservice	Xiaomi	FM Radio background service
+3	com.miui.screenrecorder	Xiaomi	MIUI Screen Recorder
+3	com.xiaomi.scanner	Xiaomi	Mi Scanner document/QR app
+3	com.duokan.phone.remotecontroller	Xiaomi	Mi Remote controller; data-installed, so use --disable-preloads to keep it restorable
+3	com.miuix.editor	Xiaomi	Optional MIUI text-action editor

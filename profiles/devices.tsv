@@ -1,0 +1,8 @@
+# id	manufacturer	device	model	name	package profile
+# ---------------------------------------------------------------------------------------------------
+# Exact device matches are deliberately used for OEM package additions. Generic
+# packages.tsv rows still apply everywhere, but an OEM list is never guessed from
+# a brand name alone.
+galaxy-tab-s10-fe-plus	Samsung	gts10fepwifi	SM-X620	Galaxy Tab S10 FE+	-
+galaxy-m23-5g	Samsung	m23xq	SM-M236B	Galaxy M23 5G	-
+redmi-10	Xiaomi	eos	21061119DG	Redmi 10	packages-redmi-10.tsv
